@@ -19,12 +19,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import io.github.jan.supabase.auth.auth
-import org.kukro.ezbill.SupabaseClient
+import io.github.jan.supabase.auth.status.SessionStatus
 import org.kukro.ezbill.SupabaseClient.supabase
 
 class HomeScreen : Screen {
@@ -32,13 +33,32 @@ class HomeScreen : Screen {
     @Composable
     override fun Content() {
         var menuExpanded by remember { mutableStateOf(false) }
+        val hostState = LocalSnackBarHostState.current
+        val scope = rememberCoroutineScope()
 
         fun toggleMenuExpanded() {
             menuExpanded = !menuExpanded
         }
 
         LaunchedEffect(Unit) {
-            supabase.auth.signInAnonymously()
+            supabase.auth.sessionStatus.collect { status ->
+                when (status) {
+                    is SessionStatus.Initializing -> {
+                        // 等待，不做事
+                    }
+                    is SessionStatus.Authenticated -> {
+                        hostState.showSnackbar("Login directly")
+                    }
+                    is SessionStatus.NotAuthenticated -> {
+                        hostState.showSnackbar("There's no session, signInAnonymously")
+                        supabase.auth.signInAnonymously()
+                    }
+
+                    is SessionStatus.RefreshFailure -> {
+                        hostState.showSnackbar("SessionStatus RefreshFailure")
+                    }
+                }
+            }
         }
 
         Scaffold(

@@ -14,4 +14,8 @@ class SupabaseSessionManager(private val settings: Settings) {
         return settings.get<String>(sessionKey)
     }
 
+    fun deleteSession() {
+        settings.remove(sessionKey)
+    }
+
 }
