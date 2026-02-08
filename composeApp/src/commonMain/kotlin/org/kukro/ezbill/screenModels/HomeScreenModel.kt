@@ -44,9 +44,14 @@ class HomeScreenModel : ScreenModel {
                         println("Authenticated")
                         emitSnackBar("login")
                         val user = supabase.auth.currentUserOrNull()
-                        state.userInfo = state.userInfo.copy(
-                            username = user?.userMetadata?.get("username").toString()
+                        state = state.copy(
+                            userInfo = state.userInfo.copy(
+                                username = user?.userMetadata?.get("username").toString()
+                            )
                         )
+                        screenModelScope.launch {
+                            getAllSpaces()
+                        }
                     }
 
                     is SessionStatus.NotAuthenticated -> {
@@ -59,7 +64,11 @@ class HomeScreenModel : ScreenModel {
                                 "avatar" to "https://suibian.s3.bitiful.net/avatar_fox.png"
                             )
                         )
-                        state.userInfo = state.userInfo.copy(username = username)
+                        state = state.copy(
+                            userInfo = state.userInfo.copy(
+                                username = username
+                            )
+                        )
                     }
 
                     is SessionStatus.RefreshFailure -> {
@@ -72,6 +81,14 @@ class HomeScreenModel : ScreenModel {
 
     fun onMenuExpanded(expanded: Boolean) {
         state = state.copy(menuExpanded = expanded)
+    }
+
+    fun onSpaceListExpanded(expanded: Boolean) {
+        state = state.copy(spaceListExpanded = expanded)
+    }
+
+    fun onToggleSpace(space: Space) {
+        state = state.copy(space = space)
     }
 
     fun onShowCreateDialog(show: Boolean) {
@@ -90,6 +107,16 @@ class HomeScreenModel : ScreenModel {
     suspend fun submitNewSpace() {
         val space = SupabaseService.createSpace(state.newSpaceName)
         state = state.copy(space = space)
+        getAllSpaces()
+    }
+
+    suspend fun getAllSpaces() {
+        val myCreatedList = SupabaseService.fetchMyCreatedSpaces()
+        val myJoinedList = SupabaseService.fetchJoinedSpaces()
+        val merged = (myCreatedList + myJoinedList)
+            .distinctBy { it.id }
+
+        state = state.copy(spaceList = merged)
     }
 
 }
@@ -97,9 +124,11 @@ class HomeScreenModel : ScreenModel {
 data class HomeState(
     var userInfo: UserInfo = UserInfo(username = ""),
     val menuExpanded: Boolean = false,
+    val spaceListExpanded: Boolean = false,
     val showCreateSpaceDialog: Boolean = false,
     val newSpaceName: String = "",
-    val space: Space = Space(id = "", code = "")
+    val space: Space = Space(id = "", code = ""),
+    val spaceList: List<Space> = emptyList()
 )
 
 

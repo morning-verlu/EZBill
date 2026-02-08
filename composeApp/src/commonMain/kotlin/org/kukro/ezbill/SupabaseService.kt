@@ -2,7 +2,9 @@ package org.kukro.ezbill
 
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import org.kukro.ezbill.SupabaseClient.supabase
+import org.kukro.ezbill.models.MembershipWithSpace
 import org.kukro.ezbill.models.Space
 import kotlin.random.Random
 
@@ -39,6 +41,34 @@ object SupabaseService {
         }
 
         throw lastError ?: IllegalStateException("Create space failed")
+    }
+
+    suspend fun fetchMyCreatedSpaces(): List<Space> {
+        val userId = supabase.auth.currentUserOrNull()?.id
+            ?: return emptyList()
+        println("userId = $userId")
+
+//        val result = supabase.postgrest["spaces"]
+//            .select {
+//                filter {
+//                    eq("owner_id", userId)
+//                }
+//            }
+        val result = supabase.postgrest["spaces"].select()
+
+        return result.decodeList<Space>()
+    }
+
+    suspend fun fetchJoinedSpaces(): List<Space> {
+        val userId = supabase.auth.currentUserOrNull()?.id ?: return emptyList()
+        println("userId = $userId")
+
+        val result = supabase.postgrest["space_memberships"]
+            .select(columns = Columns.raw("space_id, spaces(*)")) {
+                filter { eq("user_id", userId) }
+            }
+
+        return result.decodeList<MembershipWithSpace>().map { it.spaces }
     }
 }
 

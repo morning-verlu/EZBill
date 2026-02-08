@@ -1,5 +1,6 @@
 package org.kukro.ezbill.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,8 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -32,13 +33,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
@@ -51,7 +55,7 @@ class HomeScreen : Screen {
         val hostState = LocalSnackBarHostState.current
         val scope = rememberCoroutineScope()
         val focusRequester = remember { FocusRequester() }
-        val homeScreenModel = remember { HomeScreenModel() }
+        val homeScreenModel = rememberScreenModel { HomeScreenModel() }
 
 
         LaunchedEffect(Unit) {
@@ -63,7 +67,51 @@ class HomeScreen : Screen {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(homeScreenModel.state.space.name ?: "Have fun") },
+                    title = {
+                        Column(
+                            horizontalAlignment = Alignment.Start,
+                            modifier = Modifier
+                                .clickable { homeScreenModel.onSpaceListExpanded(true) }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Row {
+                                Text(
+                                    text = homeScreenModel.state.space.name ?: "Have fun",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null
+                                )
+                            }
+                            Row {
+                                Text(
+                                    text = homeScreenModel.state.space.code,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = homeScreenModel.state.spaceListExpanded,
+                            onDismissRequest = {
+                                homeScreenModel.onSpaceListExpanded(false)
+                            }
+                        ) {
+                            homeScreenModel.state.spaceList.forEach { space ->
+                                DropdownMenuItem(
+                                    text = { Text("${space.name}") },
+                                    onClick = {
+                                        homeScreenModel.onToggleSpace(space)
+                                        homeScreenModel.onSpaceListExpanded(false)
+                                    },
+                                )
+                            }
+                        }
+                    },
                     actions = {
                         Row {
                             Column {
@@ -71,8 +119,8 @@ class HomeScreen : Screen {
                                     homeScreenModel.onMenuExpanded(true)
                                 }) {
                                     Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = null
+                                        imageVector = Icons.Outlined.AddCircleOutline,
+                                        contentDescription = "Add"
                                     )
                                 }
                                 DropdownMenu(
@@ -177,7 +225,10 @@ class HomeScreen : Screen {
                     }
                 }
                 Column {
-                    Text(homeScreenModel.state.space.toString())
+                    homeScreenModel.state.spaceList.forEach { space ->
+                        Text(space.toString())
+                    }
+
                 }
             }
         }
