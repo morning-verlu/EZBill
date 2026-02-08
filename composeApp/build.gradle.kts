@@ -35,6 +35,8 @@ kotlin {
             implementation(libs.ktor.client.darwin)
         }
         commonMain.dependencies {
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor3)
             implementation(libs.multiplatform.settings)
             implementation(libs.multiplatform.settings.coroutines)
             implementation(compose.materialIconsExtended)
@@ -92,4 +94,6 @@ android {
 dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
+
+
 
