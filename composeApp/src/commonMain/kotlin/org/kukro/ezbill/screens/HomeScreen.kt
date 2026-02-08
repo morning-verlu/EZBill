@@ -1,100 +1,74 @@
 package org.kukro.ezbill.screens
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import cafe.adriel.voyager.core.screen.Screen
 import coil3.compose.AsyncImage
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.status.SessionStatus
-import org.kukro.ezbill.SupabaseClient.supabase
-import org.kukro.ezbill.models.UserInfo
-import kotlin.random.Random
+import kotlinx.coroutines.launch
+import org.kukro.ezbill.screenModels.HomeScreenModel
 
 class HomeScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
-        var menuExpanded by remember { mutableStateOf(false) }
         val hostState = LocalSnackBarHostState.current
         val scope = rememberCoroutineScope()
-        var userInfo: UserInfo by remember { mutableStateOf(UserInfo(username = "")) }
+        val focusRequester = remember { FocusRequester() }
+        val homeScreenModel = remember { HomeScreenModel() }
 
 
         LaunchedEffect(Unit) {
-            supabase.auth.sessionStatus.collect { status ->
-                when (status) {
-                    is SessionStatus.Initializing -> {
-                        // 等待，不做事
-                    }
-
-                    is SessionStatus.Authenticated -> {
-                        hostState.showSnackbar("Login directly")
-                        userInfo = userInfo.copy(
-                            username = supabase.auth.currentUserOrNull()?.userMetadata?.get("username")
-                                .toString(),
-                        )
-                    }
-
-                    is SessionStatus.NotAuthenticated -> {
-                        hostState.showSnackbar("There's no session, signInAnonymously")
-                        supabase.auth.signInAnonymously()
-                        val username = generateUsername()
-                        supabase.auth.updateUser {
-                            data {
-                                "username" to username
-                                "avatar" to "https://suibian.s3.bitiful.net/avatar_fox.png"
-                            }
-                        }
-                        userInfo = userInfo.copy(username = username)
-                    }
-
-                    is SessionStatus.RefreshFailure -> {
-                        hostState.showSnackbar("SessionStatus RefreshFailure")
-                    }
-                }
+            homeScreenModel.snackBar.collect { msg ->
+                hostState.showSnackbar(msg)
             }
         }
 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("") },
-                    navigationIcon = {
-                        IconButton(onClick = { /* TODO: Open drawer */ }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Menu,
-                                contentDescription = "菜单"
-                            )
-                        }
-                    },
+                    title = { Text(homeScreenModel.state.space.name ?: "Have fun") },
                     actions = {
                         Row {
                             Column {
                                 IconButton(onClick = {
-                                    menuExpanded = true
+                                    homeScreenModel.onMenuExpanded(true)
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
@@ -102,25 +76,32 @@ class HomeScreen : Screen {
                                     )
                                 }
                                 DropdownMenu(
-                                    expanded = menuExpanded,
-                                    onDismissRequest = { menuExpanded = false }
+                                    expanded = homeScreenModel.state.menuExpanded,
+                                    onDismissRequest = {
+                                        homeScreenModel.onMenuExpanded(false)
+                                    }
                                 ) {
                                     DropdownMenuItem(
                                         text = { Text("Create Space") },
-                                        onClick = { /* Do something... */ }
+                                        onClick = {
+                                            homeScreenModel.onShowCreateDialog(true)
+                                            homeScreenModel.onMenuExpanded(false)
+                                        }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Join Space") },
-                                        onClick = { /* Do something... */ }
+                                        onClick = {
+                                            homeScreenModel.onMenuExpanded(false)
+                                        }
                                     )
                                 }
                             }
 
                             Column {
                                 AsyncImage(
-                                    model = userInfo.avatar,
+                                    model = homeScreenModel.state.userInfo.avatar,
+                                    modifier = Modifier.size(48.dp),
                                     contentDescription = null,
-                                    modifier = Modifier.size(48.dp)
                                 )
                             }
                         }
@@ -134,29 +115,71 @@ class HomeScreen : Screen {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
-                Column {
+                if (homeScreenModel.state.showCreateSpaceDialog) {
+                    Dialog(
+                        onDismissRequest = {
+                            homeScreenModel.onShowCreateDialog(false)
+                        },
+                        properties = DialogProperties()
+                    ) {
+                        val keyboard = LocalSoftwareKeyboardController.current
+                        LaunchedEffect(Unit) {
+                            focusRequester.requestFocus()
+                            keyboard?.show()
+                        }
+                        Card(
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(20.dp)
+                                    .widthIn(min = 280.dp, max = 360.dp)
+                            ) {
+                                Text(
+                                    text = "空间名称",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
 
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.newSpaceName,
+                                    onValueChange = { homeScreenModel.onSpaceNameChange(it) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                        .focusRequester(focusRequester)
+                                )
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    TextButton(onClick = { homeScreenModel.onDismissCreateDialog() }) {
+                                        Text("Cancel")
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                homeScreenModel.submitNewSpace()
+                                                homeScreenModel.onDismissCreateDialog()
+                                            }
+                                        },
+                                        enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
+                                    ) {
+                                        Text("Create")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Column {
+                    Text(homeScreenModel.state.space.toString())
                 }
             }
         }
     }
-}
-
-private fun generateUsername(): String {
-    val adjectives = listOf(
-        "大大的", "小小的", "勤奋的", "可爱的", "憨憨的", "聪明的",
-        "萌萌的", "酷酷的", "温柔的", "活泼的", "懒懒的", "调皮的",
-        "认真的", "开心的", "慢吞吞的", "急匆匆的", "圆滚滚的", "亮晶晶的"
-    )
-
-    val nouns = listOf(
-        "猕猴桃", "小蜜蜂", "小猫咪", "小狗狗", "小兔子", "小松鼠",
-        "小熊猫", "小老虎", "小绵羊", "小鸭子", "小金鱼", "小蜗牛",
-        "小草莓", "小西瓜", "小葡萄", "小苹果", "小橘子", "小蘑菇"
-    )
-
-    val randomAdjective = adjectives[Random.nextInt(adjectives.size)]
-    val randomNoun = nouns[Random.nextInt(nouns.size)]
-
-    return "$randomAdjective$randomNoun"
 }
