@@ -8,6 +8,8 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.signInAnonymously
 import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -96,8 +98,21 @@ class HomeScreenModel : ScreenModel {
         if (!show) state = state.copy(newSpaceName = "")
     }
 
-    fun onSpaceNameChange(value: String) {
+    fun onShowJoinDialog(show: Boolean) {
+        state = state.copy(showJoinSpaceDialog = show)
+        if (!show) state = state.copy(joinSpaceCode = "")
+    }
+
+    fun onNewSpaceNameChange(value: String) {
         state = state.copy(newSpaceName = value)
+    }
+
+    fun onJoinSpaceCodeChange(value: String) {
+        state = state.copy(joinSpaceCode = value)
+    }
+
+    fun onDismissJoinDialog() {
+        state = state.copy(showJoinSpaceDialog = false, joinSpaceCode = "")
     }
 
     fun onDismissCreateDialog() {
@@ -109,6 +124,25 @@ class HomeScreenModel : ScreenModel {
         state = state.copy(space = space)
         getAllSpaces()
     }
+
+    suspend fun submitJoinSpace() {
+        val code: String = state.joinSpaceCode
+        if (code.isEmpty()) {
+            println("!!!! join code is empty !!!!")
+            return
+        }
+
+        val space = supabase.postgrest.rpc(
+            "join_space_by_code",
+            mapOf(
+                "p_code" to code,
+                "p_display_name" to null
+            )
+        ).decodeAs<Space>()
+
+        state = state.copy(spaceList = state.spaceList + listOf(space))
+    }
+
 
     suspend fun getAllSpaces() {
         val myCreatedList = SupabaseService.fetchMyCreatedSpaces()
@@ -125,6 +159,8 @@ data class HomeState(
     var userInfo: UserInfo = UserInfo(username = ""),
     val menuExpanded: Boolean = false,
     val spaceListExpanded: Boolean = false,
+    val showJoinSpaceDialog: Boolean = false,
+    val joinSpaceCode: String = "",
     val showCreateSpaceDialog: Boolean = false,
     val newSpaceName: String = "",
     val space: Space = Space(id = "", code = ""),

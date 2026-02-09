@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -37,7 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -56,6 +59,7 @@ class HomeScreen : Screen {
         val scope = rememberCoroutineScope()
         val focusRequester = remember { FocusRequester() }
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
+        val clipboard = LocalClipboardManager.current
 
 
         LaunchedEffect(Unit) {
@@ -81,17 +85,22 @@ class HomeScreen : Screen {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = null
-                                )
+                                if (homeScreenModel.state.spaceList.isNotEmpty()) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null
+                                    )
+                                }
                             }
                             Row {
-                                Text(
-                                    text = homeScreenModel.state.space.code,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                )
+                                if (homeScreenModel.state.space.code.isNotEmpty()) {
+                                    Text(
+                                        text = homeScreenModel.state.space.code,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                    )
+                                }
+
                             }
                         }
 
@@ -103,12 +112,31 @@ class HomeScreen : Screen {
                         ) {
                             homeScreenModel.state.spaceList.forEach { space ->
                                 DropdownMenuItem(
-                                    text = { Text("${space.name}") },
+                                    text = {
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("${space.name}")
+                                            IconButton(
+                                                onClick = {
+                                                    clipboard.setText(AnnotatedString(homeScreenModel.state.space.code))
+                                                },
+                                                modifier = Modifier.size(20.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "Copy code"
+                                                )
+                                            }
+                                        }
+                                    },
                                     onClick = {
                                         homeScreenModel.onToggleSpace(space)
                                         homeScreenModel.onSpaceListExpanded(false)
                                     },
                                 )
+
                             }
                         }
                     },
@@ -139,6 +167,7 @@ class HomeScreen : Screen {
                                     DropdownMenuItem(
                                         text = { Text("Join Space") },
                                         onClick = {
+                                            homeScreenModel.onShowJoinDialog(true)
                                             homeScreenModel.onMenuExpanded(false)
                                         }
                                     )
@@ -192,7 +221,7 @@ class HomeScreen : Screen {
 
                                 OutlinedTextField(
                                     value = homeScreenModel.state.newSpaceName,
-                                    onValueChange = { homeScreenModel.onSpaceNameChange(it) },
+                                    onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                         .focusRequester(focusRequester)
@@ -218,6 +247,67 @@ class HomeScreen : Screen {
                                         enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
                                     ) {
                                         Text("Create")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (homeScreenModel.state.showJoinSpaceDialog) {
+                    Dialog(
+                        onDismissRequest = {
+                            homeScreenModel.onShowJoinDialog(false)
+                        },
+                        properties = DialogProperties()
+                    ) {
+                        val keyboard = LocalSoftwareKeyboardController.current
+                        LaunchedEffect(Unit) {
+                            focusRequester.requestFocus()
+                            keyboard?.show()
+                        }
+                        Card(
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(20.dp)
+                                    .widthIn(min = 280.dp, max = 360.dp)
+                            ) {
+                                Text(
+                                    text = "空间分享code",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.joinSpaceCode,
+                                    onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                        .focusRequester(focusRequester)
+                                )
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    TextButton(onClick = { homeScreenModel.onDismissJoinDialog() }) {
+                                        Text("Cancel")
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                homeScreenModel.submitJoinSpace()
+                                                homeScreenModel.onDismissJoinDialog()
+                                            }
+                                        },
+                                        enabled = homeScreenModel.state.joinSpaceCode.isNotEmpty()
+                                    ) {
+                                        Text("Join")
                                     }
                                 }
                             }
