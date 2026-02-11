@@ -150,7 +150,12 @@ class HomeScreenModel : ScreenModel {
         val merged = (myCreatedList + myJoinedList)
             .distinctBy { it.id }
 
-        state = state.copy(spaceList = merged, space = merged[0])
+        state = if (merged.isNotEmpty()) {
+            state.copy(spaceList = merged, space = merged[0])
+        } else {
+            state.copy(spaceList = emptyList())
+        }
+
     }
 
 }
