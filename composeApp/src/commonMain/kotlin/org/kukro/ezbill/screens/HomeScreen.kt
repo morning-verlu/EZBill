@@ -115,6 +115,7 @@ class HomeScreen : Screen {
                                     text = {
                                         Row(
                                             horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Text("${space.name}")
