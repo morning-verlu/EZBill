@@ -49,7 +49,8 @@ class HomeScreenModel : ScreenModel {
                         state = state.copy(
                             userInfo = state.userInfo.copy(
                                 username = user?.userMetadata?.get("username").toString()
-                            )
+                            ),
+                            currentUserId = user?.id
                         )
                         screenModelScope.launch {
                             getAllSpaces()
@@ -155,12 +156,13 @@ class HomeScreenModel : ScreenModel {
         } else {
             state.copy(spaceList = emptyList())
         }
-
     }
+
 
 }
 
 data class HomeState(
+    val currentUserId: String? = null,
     var userInfo: UserInfo = UserInfo(username = ""),
     val menuExpanded: Boolean = false,
     val spaceListExpanded: Boolean = false,

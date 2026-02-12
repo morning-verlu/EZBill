@@ -1,5 +1,6 @@
 package org.kukro.ezbill.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,12 +17,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,8 +51,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
+import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.screenModels.HomeScreenModel
 
 class HomeScreen : Screen {
@@ -60,6 +67,7 @@ class HomeScreen : Screen {
         val focusRequester = remember { FocusRequester() }
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
         val clipboard = LocalClipboardManager.current
+        val navigator = LocalNavigator.current
 
 
         LaunchedEffect(Unit) {
@@ -121,7 +129,11 @@ class HomeScreen : Screen {
                                             Text("${space.name}")
                                             IconButton(
                                                 onClick = {
-                                                    clipboard.setText(AnnotatedString(homeScreenModel.state.space.code))
+                                                    clipboard.setText(
+                                                        AnnotatedString(
+                                                            homeScreenModel.state.space.code
+                                                        )
+                                                    )
                                                 },
                                                 modifier = Modifier.size(20.dp)
                                             ) {
@@ -185,7 +197,27 @@ class HomeScreen : Screen {
                         }
                     }
                 )
-            }
+            },
+            floatingActionButton = {
+                val canShow = homeScreenModel.state.currentUserId != null
+                        && homeScreenModel.state.space.id.isNotBlank()
+                AnimatedVisibility(canShow) {
+                    FloatingActionButton(onClick = {
+                        navigator?.push(
+                            EditExpenseScreen(
+                                spaceId = homeScreenModel.state.space.id,
+                                payerId = homeScreenModel.state.currentUserId!!
+                            )
+                        )
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.Create,
+                            contentDescription = "create new expense"
+                        )
+                    }
+                }
+            },
+            floatingActionButtonPosition = FabPosition.End
         ) { paddingValues ->
             Column(
                 modifier = Modifier
