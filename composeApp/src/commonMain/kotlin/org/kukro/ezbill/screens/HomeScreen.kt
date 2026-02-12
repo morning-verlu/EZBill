@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -24,8 +26,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,13 +58,11 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.screenModels.HomeScreenModel
 
 class HomeScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     override fun Content() {
         val hostState = LocalSnackBarHostState.current
@@ -149,7 +152,6 @@ class HomeScreen : Screen {
                                         homeScreenModel.onSpaceListExpanded(false)
                                     },
                                 )
-
                             }
                         }
                     },
@@ -347,11 +349,18 @@ class HomeScreen : Screen {
                         }
                     }
                 }
-                Column {
-                    homeScreenModel.state.spaceList.forEach { space ->
+                LazyColumn {
+
+                    items(homeScreenModel.state.spaceList) { space ->
                         Text(space.toString())
+                        HorizontalFloatingToolbar(expanded = true) {
+                        }
                     }
 
+                    items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
+                        Text(expense.toString())
+                        HorizontalDivider(thickness = 10.dp)
+                    }
                 }
             }
         }
