@@ -453,7 +453,7 @@ class HomeScreen : Screen {
                     items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
                         Card(
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Row(

@@ -10,18 +10,20 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import org.kukro.ezbill.screens.HomeScreen
 import org.kukro.ezbill.screens.LocalSnackBarHostState
+import org.kukro.ezbill.ui.theme.EzBillTheme
 
 @Composable
 fun App() {
+    EzBillTheme{
+        val hostState = remember { SnackbarHostState() }
 
-    val hostState = remember { SnackbarHostState() }
-
-    CompositionLocalProvider(LocalSnackBarHostState provides hostState) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(hostState) }
-        ) {
-            Navigator(HomeScreen()) {
-                SlideTransition(it)
+        CompositionLocalProvider(LocalSnackBarHostState provides hostState) {
+            Scaffold(
+                snackbarHost = { SnackbarHost(hostState) }
+            ) {
+                Navigator(HomeScreen()) {
+                    SlideTransition(it)
+                }
             }
         }
     }
