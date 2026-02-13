@@ -312,7 +312,7 @@ class HomeScreen : Screen {
                                         value = homeScreenModel.state.newSpaceName,
                                         onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
                                         singleLine = true,
-                                        placeholder = {Text("空间名称")},
+                                        placeholder = { Text("空间名称") },
                                         modifier = Modifier.fillMaxWidth()
                                             .focusRequester(focusRequester)
                                     )
@@ -323,7 +323,7 @@ class HomeScreen : Screen {
                                         value = homeScreenModel.state.displayName,
                                         onValueChange = { homeScreenModel.onDisplayNameChange(it) },
                                         singleLine = true,
-                                        placeholder = {Text("你在空间的昵称")},
+                                        placeholder = { Text("你在空间的昵称") },
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
@@ -384,7 +384,7 @@ class HomeScreen : Screen {
                                         .widthIn(min = 280.dp, max = 360.dp)
                                 ) {
                                     Text(
-                                        text = "空间分享code",
+                                        text = "加入空间",
                                         style = MaterialTheme.typography.titleMedium
                                     )
 
@@ -394,8 +394,19 @@ class HomeScreen : Screen {
                                         value = homeScreenModel.state.joinSpaceCode,
                                         onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
                                         singleLine = true,
+                                        placeholder = { Text("分享码") },
                                         modifier = Modifier.fillMaxWidth()
                                             .focusRequester(focusRequester)
+                                    )
+
+                                    Spacer(Modifier.height(12.dp))
+
+                                    OutlinedTextField(
+                                        value = homeScreenModel.state.displayName,
+                                        onValueChange = { homeScreenModel.onDisplayNameChange(it) },
+                                        singleLine = true,
+                                        placeholder = { Text("你在空间的昵称") },
+                                        modifier = Modifier.fillMaxWidth()
                                     )
 
                                     Spacer(Modifier.height(16.dp))

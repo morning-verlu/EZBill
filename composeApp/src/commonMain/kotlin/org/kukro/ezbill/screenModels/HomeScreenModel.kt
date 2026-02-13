@@ -221,7 +221,7 @@ class HomeScreenModel : ScreenModel {
     }
 
     fun onDismissJoinDialog() {
-        state = state.copy(showJoinSpaceDialog = false, joinSpaceCode = "")
+        state = state.copy(showJoinSpaceDialog = false, joinSpaceCode = "", displayName = "")
     }
 
     fun onDismissCreateDialog() {
