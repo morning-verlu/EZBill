@@ -180,6 +180,12 @@ class HomeScreenModel : ScreenModel {
         state = state.copy(showCreateSpaceDialog = false, newSpaceName = "")
     }
 
+    fun onExpandedFabButtons(show: Boolean) {
+        state = state.copy(
+            expandedFabButtons = show
+        )
+    }
+
     private fun setLoading() {
         uiState = HomeUiState.Loading
     }
@@ -297,7 +303,8 @@ data class HomeState(
     val newSpaceName: String = "",
     val space: Space = Space(id = "", code = ""),
     val spaceList: List<Space> = emptyList(),
-    val expenses: List<Expense> = emptyList()
+    val expenses: List<Expense> = emptyList(),
+    val expandedFabButtons: Boolean = false,
 )
 
 sealed class HomeUiState {

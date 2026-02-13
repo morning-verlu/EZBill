@@ -1,7 +1,6 @@
 package org.kukro.ezbill.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,7 +30,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
@@ -39,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -211,26 +214,57 @@ class HomeScreen : Screen {
                 )
             },
             floatingActionButton = {
-                val canShow = homeScreenModel.state.currentUserId != null
-                        && homeScreenModel.state.space.id.isNotBlank()
-                AnimatedVisibility(canShow) {
-                    FloatingActionButton(onClick = {
-                        navigator?.push(
-                            EditExpenseScreen(
-                                spaceId = homeScreenModel.state.space.id,
-                                payerId = homeScreenModel.state.currentUserId!!
+                val canUse =
+                    homeScreenModel.state.currentUserId != null
+                            && homeScreenModel.state.space.id != ""
+                AnimatedVisibility(canUse) {
+                    Box(
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    ) {
+                        FloatingActionButtonMenu(
+                            expanded = homeScreenModel.state.expandedFabButtons,
+                            button = {
+                                ToggleFloatingActionButton(
+                                    checked = homeScreenModel.state.expandedFabButtons,
+                                    onCheckedChange = { homeScreenModel.onExpandedFabButtons(it) },
+                                ) {
+                                    Icon(
+                                        imageVector = if (homeScreenModel.state.expandedFabButtons) Icons.Filled.Close else Icons.Filled.Create,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
+                        ) {
+                            FloatingActionButtonMenuItem(
+                                onClick = { },
+                                text = { Text("结算分摊") },
+                                icon = {
+                                    Icon(
+                                        Icons.Filled.TableChart,
+                                        contentDescription = null
+                                    )
+                                }
                             )
-                        )
-                    }) {
-                        Icon(
-                            imageVector = Icons.Filled.Create,
-                            contentDescription = "create new expense"
-                        )
+
+                            FloatingActionButtonMenuItem(
+                                onClick = {
+                                    navigator?.push(
+                                        EditExpenseScreen(
+                                            spaceId = homeScreenModel.state.space.id,
+                                            payerId = homeScreenModel.state.currentUserId!!
+                                        )
+                                    )
+                                },
+                                text = { Text("新增账单") },
+                                icon = { Icon(Icons.Filled.Create, contentDescription = null) }
+                            )
+                        }
                     }
                 }
             },
             floatingActionButtonPosition = FabPosition.End
-        ) { paddingValues ->
+        )
+        { paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
