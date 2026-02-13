@@ -21,3 +21,11 @@ data class MembershipWithSpace(
     @SerialName("space_id") val spaceId: String,
     val spaces: Space
 )
+
+@Serializable
+data class SpaceMember(
+    @SerialName("user_id") val userId: String,
+    @SerialName("display_name") val displayName: String? = null,
+    val role: String? = null,
+    @SerialName("joined_at") val joinedAt: String? = null
+)

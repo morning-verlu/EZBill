@@ -10,6 +10,7 @@ import io.github.jan.supabase.auth.signInAnonymously
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
@@ -24,7 +25,9 @@ import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.SupabaseService
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Space
+import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.models.UserInfo
+import kotlin.collections.plus
 import kotlin.random.Random
 
 class HomeScreenModel : ScreenModel {
@@ -35,6 +38,8 @@ class HomeScreenModel : ScreenModel {
     val snackBar = _snackBar.asSharedFlow()
 
     private var expensesChannel: RealtimeChannel? = null
+    private var membersChannel: RealtimeChannel? = null
+
 
     var uiState by mutableStateOf<HomeUiState>(HomeUiState.Idle)
         private set
@@ -64,6 +69,28 @@ class HomeScreenModel : ScreenModel {
         // 再订阅
         expensesChannel?.subscribe()
         println("subscribe() called")
+    }
+
+    suspend fun subscribeMembers(spaceId: String) {
+        membersChannel?.unsubscribe()
+        membersChannel = supabase.realtime.channel("members-$spaceId")
+
+        screenModelScope.launch {
+            membersChannel!!
+                .postgresChangeFlow<PostgresAction.Insert>("public") {
+                    table = "space_memberships"
+                    filter("space_id", FilterOperator.EQ, spaceId)
+                }
+                .collect { payload ->
+                    val newMember = payload.decodeRecord<SpaceMember>()
+                    if (state.spaceMembers.none { it.userId == newMember.userId }) {
+                        state = state.copy(spaceMembers = state.spaceMembers + newMember)
+                    }
+                    emitSnackBar("新成员加入：${newMember.displayName ?: newMember.userId.take(6)}")
+                }
+        }
+
+        membersChannel?.subscribe()
     }
 
 
@@ -149,8 +176,12 @@ class HomeScreenModel : ScreenModel {
         state = state.copy(space = space)
 
         screenModelScope.launch {
-            loadExpenses(space.id)
-            subscribeExpenses(space.id)
+            state.space.id.takeIf { it.isNotBlank() }?.let {
+                loadExpenses(it)
+                subscribeExpenses(it)
+                loadMembers(it)
+                subscribeMembers(it)
+            }
         }
     }
 
@@ -191,6 +222,7 @@ class HomeScreenModel : ScreenModel {
     }
 
     private suspend fun setError(msg: String) {
+        println("msgError:$msg")
         emitSnackBar(msg)
     }
 
@@ -198,6 +230,43 @@ class HomeScreenModel : ScreenModel {
         uiState = HomeUiState.Idle
     }
 
+    suspend fun loadMembers(spaceId: String): List<SpaceMember> {
+        setLoading()
+        try {
+            val result = supabase.postgrest["space_memberships"].select {
+                filter { eq("space_id", spaceId) }
+                order("joined_at", Order.ASCENDING)
+            }
+            state = state.copy(
+                spaceMembers = result.decodeList<SpaceMember>()
+            )
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
+        }
+        return state.spaceMembers
+    }
+
+    suspend fun updateMyDisplayName(spaceId: String, userId: String, name: String) {
+        setLoading()
+        try {
+            supabase.postgrest["space_memberships"].update(
+                {
+                    set("display_name", name)
+                }
+            ) {
+                filter {
+                    eq("space_id", spaceId)
+                    eq("user_id", userId)
+                }
+            }
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
+        }
+    }
 
     suspend fun submitNewSpace() {
         setLoading()
@@ -210,7 +279,6 @@ class HomeScreenModel : ScreenModel {
         } finally {
             setIdle()
         }
-
     }
 
     suspend fun submitJoinSpace() {
@@ -255,6 +323,7 @@ class HomeScreenModel : ScreenModel {
                 state.copy(spaceList = emptyList())
             }
 
+            state.space.id.takeIf { it.isNotBlank() }?.let { loadMembers(it) }
         } catch (e: Exception) {
             setError(e.message.toString())
         } finally {
@@ -262,7 +331,6 @@ class HomeScreenModel : ScreenModel {
         }
 
         return state.space.id.takeIf { it.isNotBlank() }
-
     }
 
     suspend fun loadExpenses(spaceId: String) {
@@ -287,6 +355,7 @@ class HomeScreenModel : ScreenModel {
     override fun onDispose() {
         screenModelScope.launch {
             expensesChannel?.unsubscribe()
+            membersChannel?.unsubscribe()
         }
     }
 
@@ -305,6 +374,7 @@ data class HomeState(
     val spaceList: List<Space> = emptyList(),
     val expenses: List<Expense> = emptyList(),
     val expandedFabButtons: Boolean = false,
+    val spaceMembers: List<SpaceMember> = emptyList()
 )
 
 sealed class HomeUiState {

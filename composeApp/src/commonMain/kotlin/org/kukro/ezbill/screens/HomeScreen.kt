@@ -63,6 +63,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
 
@@ -415,6 +416,18 @@ class HomeScreen : Screen {
                 }
                 LazyColumn {
 
+                    item {
+                        MemberPreviewList(
+                            members = homeScreenModel.state.spaceMembers,
+                            maxCount = 6,
+                            onViewAll = {
+                                homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
+                                    navigator?.push(MembersScreen(spaceId = it))
+                                }
+                            }
+                        )
+                    }
+
                     items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
                         Card(
                             shape = RoundedCornerShape(12.dp),
@@ -452,3 +465,37 @@ class HomeScreen : Screen {
 
     }
 }
+
+@Composable
+fun MemberPreviewList(
+    members: List<SpaceMember>,
+    maxCount: Int = 5,
+    onViewAll: () -> Unit
+) {
+    val preview = members.take(maxCount)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        preview.forEach { user ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = user.displayName?.takeIf { it.isNotBlank() }
+                        ?: (user.userId.take(6) + "..."),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = user.role ?: "",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        if (members.size > maxCount) {
+            TextButton(onClick = onViewAll) {
+                Text("查看全部成员 (${members.size})")
+            }
+        }
+    }
+}
+
