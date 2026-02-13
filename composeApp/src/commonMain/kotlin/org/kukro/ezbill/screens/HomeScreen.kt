@@ -249,10 +249,13 @@ class HomeScreen : Screen {
 
                             FloatingActionButtonMenuItem(
                                 onClick = {
+                                    val userId = homeScreenModel.state.currentUserId
+                                        ?: return@FloatingActionButtonMenuItem
                                     navigator?.push(
                                         EditExpenseScreen(
                                             spaceId = homeScreenModel.state.space.id,
-                                            payerId = homeScreenModel.state.currentUserId!!
+                                            members = homeScreenModel.state.spaceMembers,
+                                            userId = userId
                                         )
                                     )
                                 },
