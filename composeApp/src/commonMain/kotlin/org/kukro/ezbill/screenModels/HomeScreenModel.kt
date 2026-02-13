@@ -18,9 +18,9 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.SupabaseService
@@ -118,12 +118,19 @@ class HomeScreenModel : ScreenModel {
                         println("Authenticated")
                         emitSnackBar("login")
                         val user = supabase.auth.currentUserOrNull()
+                        val metaUsername = user?.userMetadata
+                            ?.get("username")
+                            ?.toString()
+                            ?.trim('"')
+                            .orEmpty()
+
                         state = state.copy(
                             userInfo = state.userInfo.copy(
-                                username = user?.userMetadata?.get("username").toString()
+                                username = metaUsername.ifBlank { generateUsername() }
                             ),
                             currentUserId = user?.id
                         )
+
                         screenModelScope.launch {
                             val spaceId = loadSpaces()
                             if (!spaceId.isNullOrBlank()) {
@@ -286,6 +293,7 @@ class HomeScreenModel : ScreenModel {
             val space = SupabaseService.createSpace(state.newSpaceName, finalDisplayName)
             loadSpaces(selectedSpaceId = space.id)
             onToggleSpace(space)
+            emitSnackBar("创建成功")
         } catch (e: Exception) {
             setError(e.message.toString())
         } finally {
@@ -314,6 +322,7 @@ class HomeScreenModel : ScreenModel {
 
             state = state.copy(spaceList = state.spaceList + listOf(space))
             onToggleSpace(space = space)
+            emitSnackBar("加入成功")
         } catch (e: Exception) {
             setError(e.message.toString())
         } finally {
@@ -401,6 +410,7 @@ sealed class HomeUiState {
     object Idle : HomeUiState()
     object Loading : HomeUiState()
     data class Error(val msg: String) : HomeUiState()
+    data class Success(val msg: String) : HomeUiState()
 }
 
 
