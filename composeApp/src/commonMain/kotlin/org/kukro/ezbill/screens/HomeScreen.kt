@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -63,7 +64,9 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.LocalSnackBarHostState
+import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
@@ -447,50 +450,33 @@ class HomeScreen : Screen {
                         }
                     }
                 }
-                LazyColumn {
-
-                    item {
-                        MemberPreviewList(
-                            members = homeScreenModel.state.spaceMembers,
-                            maxCount = 6,
-                            onViewAll = {
-                                homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
-                                    navigator?.push(MembersScreen(spaceId = it))
-                                }
-                            }
-                        )
-                    }
-
-                    items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
-                        Card(
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        "¥${expense.amount}",
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Text(
-                                        text = expense.createdAt ?: "",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                                if (expense.note.isNotBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(expense.note, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = "Payer: ${expense.payerId.take(6)}...",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
+                MemberPreviewList(
+                    members = homeScreenModel.state.spaceMembers,
+                    maxCount = 6,
+                    currentUserId = homeScreenModel.state.currentUserId,
+                    currentUserName = homeScreenModel.state.userInfo.username,
+                    currentUserAvatar = homeScreenModel.state.userInfo.avatar,
+                    onViewAll = {
+                        homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
+                            navigator?.push(MembersScreen(spaceId = it))
                         }
+                    }
+                )
+
+                Spacer(Modifier.height(16.dp))
+                Text("账单记录", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(16.dp))
+
+                LazyColumn {
+                    val memberNameMap = homeScreenModel.state.spaceMembers.associate { member ->
+                        member.userId to (member.displayName?.takeIf { it.isNotBlank() }
+                            ?: member.userId.take(6))
+                    }
+                    items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
+                        ExpenseItemCard(
+                            expense = expense,
+                            payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
+                        )
                     }
                 }
             }
@@ -500,35 +486,130 @@ class HomeScreen : Screen {
 }
 
 @Composable
-fun MemberPreviewList(
-    members: List<SpaceMember>,
-    maxCount: Int = 5,
-    onViewAll: () -> Unit
+private fun ExpenseItemCard(
+    expense: Expense,
+    payerDisplayName: String
 ) {
-    val preview = members.take(maxCount)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        preview.forEach { user ->
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = user.displayName?.takeIf { it.isNotBlank() }
-                        ?: (user.userId.take(6) + "..."),
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "¥${expense.amount}",
+                    style = MaterialTheme.typography.titleLarge
                 )
                 Text(
-                    text = user.role ?: "",
-                    style = MaterialTheme.typography.labelSmall
+                    text = formatExpenseTime(expense.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
 
-        if (members.size > maxCount) {
-            TextButton(onClick = onViewAll) {
-                Text("查看全部成员 (${members.size})")
+            if (expense.note.isNotBlank()) {
+                Text(
+                    text = expense.note,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Text(
+                    text = "无备注",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Text(
+                    text = " $payerDisplayName",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
+private fun formatExpenseTime(raw: String?): String {
+    if (raw.isNullOrBlank()) return ""
+    val noZone = raw
+        .replace('T', ' ')
+        .substringBefore('+')
+        .substringBefore('Z')
+    return when {
+        noZone.length >= 16 -> noZone.substring(5, 16)
+        else -> noZone
+    }
+}
+
+@Composable
+fun MemberPreviewList(
+    members: List<SpaceMember>,
+    maxCount: Int = 5,
+    currentUserId: String?,
+    currentUserName: String,
+    currentUserAvatar: String,
+    onViewAll: () -> Unit
+) {
+    val preview = members.take(maxCount)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("成员", style = MaterialTheme.typography.titleMedium)
+        if (members.size > maxCount) {
+            TextButton(onClick = onViewAll) {
+                Text("查看全部")
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(preview, key = { it.userId }) { user ->
+            val isCurrentUser = user.userId == currentUserId
+            val avatarUrl = if (isCurrentUser) {
+                currentUserAvatar
+            } else {
+                AppConfig.DEFAULT_AVATAR
+            }
+            val displayName = if (isCurrentUser && currentUserName.isNotBlank()) {
+                currentUserName
+            } else {
+                user.displayName?.takeIf { it.isNotBlank() } ?: user.userId.take(6)
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp)
+                )
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}

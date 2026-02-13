@@ -22,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.SupabaseService
 import org.kukro.ezbill.models.Expense
@@ -150,7 +151,7 @@ class HomeScreenModel : ScreenModel {
                         supabase.auth.signInAnonymously(
                             data = mapOf(
                                 "username" to username,
-                                "avatar" to "https://suibian.s3.bitiful.net/avatar_fox.png"
+                                "avatar" to AppConfig.DEFAULT_AVATAR
                             )
                         )
                         state = state.copy(
