@@ -184,8 +184,8 @@ class HomeScreenModel : ScreenModel {
         uiState = HomeUiState.Loading
     }
 
-    private fun setError(msg: String) {
-        uiState = HomeUiState.Error(msg)
+    private suspend fun setError(msg: String) {
+        emitSnackBar(msg)
     }
 
     private fun setIdle() {

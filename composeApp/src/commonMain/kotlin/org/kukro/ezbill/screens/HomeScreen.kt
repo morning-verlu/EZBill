@@ -82,13 +82,6 @@ class HomeScreen : Screen {
             }
         }
 
-        LaunchedEffect(homeScreenModel.uiState) {
-            if (homeScreenModel.uiState is HomeUiState.Error) {
-                hostState.showSnackbar((homeScreenModel.uiState as HomeUiState.Error).msg)
-            }
-        }
-
-
         Scaffold(
             topBar = {
                 TopAppBar(
