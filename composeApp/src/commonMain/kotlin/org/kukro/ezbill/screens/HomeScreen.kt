@@ -3,6 +3,7 @@ package org.kukro.ezbill.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -60,6 +62,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.screenModels.HomeScreenModel
+import org.kukro.ezbill.screenModels.HomeUiState
 
 class HomeScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -78,6 +81,13 @@ class HomeScreen : Screen {
                 hostState.showSnackbar(msg)
             }
         }
+
+        LaunchedEffect(homeScreenModel.uiState) {
+            if (homeScreenModel.uiState is HomeUiState.Error) {
+                hostState.showSnackbar((homeScreenModel.uiState as HomeUiState.Error).msg)
+            }
+        }
+
 
         Scaffold(
             topBar = {
@@ -172,8 +182,10 @@ class HomeScreen : Screen {
                                         homeScreenModel.onMenuExpanded(false)
                                     }
                                 ) {
+                                    val canUse = homeScreenModel.state.currentUserId != null
                                     DropdownMenuItem(
                                         text = { Text("Create Space") },
+                                        enabled = canUse,
                                         onClick = {
                                             homeScreenModel.onShowCreateDialog(true)
                                             homeScreenModel.onMenuExpanded(false)
@@ -181,6 +193,7 @@ class HomeScreen : Screen {
                                     )
                                     DropdownMenuItem(
                                         text = { Text("Join Space") },
+                                        enabled = canUse,
                                         onClick = {
                                             homeScreenModel.onShowJoinDialog(true)
                                             homeScreenModel.onMenuExpanded(false)
@@ -234,6 +247,7 @@ class HomeScreen : Screen {
                         },
                         properties = DialogProperties()
                     ) {
+
                         val keyboard = LocalSoftwareKeyboardController.current
                         LaunchedEffect(Unit) {
                             focusRequester.requestFocus()
@@ -247,43 +261,53 @@ class HomeScreen : Screen {
                                     .padding(20.dp)
                                     .widthIn(min = 280.dp, max = 360.dp)
                             ) {
-                                Text(
-                                    text = "空间名称",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-
-                                Spacer(Modifier.height(12.dp))
-
-                                OutlinedTextField(
-                                    value = homeScreenModel.state.newSpaceName,
-                                    onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                        .focusRequester(focusRequester)
-                                )
-
-                                Spacer(Modifier.height(16.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    TextButton(onClick = { homeScreenModel.onDismissCreateDialog() }) {
-                                        Text("Cancel")
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                homeScreenModel.submitNewSpace()
-                                                homeScreenModel.onDismissCreateDialog()
-                                            }
-                                        },
-                                        enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
+                                if (homeScreenModel.uiState is HomeUiState.Loading) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Create")
+                                        LoadingIndicator()
+                                    }
+                                } else {
+                                    Text(
+                                        text = "空间名称",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+
+                                    Spacer(Modifier.height(12.dp))
+
+                                    OutlinedTextField(
+                                        value = homeScreenModel.state.newSpaceName,
+                                        onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .focusRequester(focusRequester)
+                                    )
+
+                                    Spacer(Modifier.height(16.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        TextButton(onClick = { homeScreenModel.onDismissCreateDialog() }) {
+                                            Text("Cancel")
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    homeScreenModel.submitNewSpace()
+                                                    homeScreenModel.onDismissCreateDialog()
+                                                }
+                                            },
+                                            enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
+                                        ) {
+                                            Text("Create")
+                                        }
                                     }
                                 }
+
                             }
                         }
                     }
@@ -303,46 +327,55 @@ class HomeScreen : Screen {
                         Card(
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(20.dp)
-                                    .widthIn(min = 280.dp, max = 360.dp)
-                            ) {
-                                Text(
-                                    text = "空间分享code",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-
-                                Spacer(Modifier.height(12.dp))
-
-                                OutlinedTextField(
-                                    value = homeScreenModel.state.joinSpaceCode,
-                                    onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                        .focusRequester(focusRequester)
-                                )
-
-                                Spacer(Modifier.height(16.dp))
-
-                                Row(
+                            if (homeScreenModel.uiState is HomeUiState.Loading) {
+                                Box(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    TextButton(onClick = { homeScreenModel.onDismissJoinDialog() }) {
-                                        Text("Cancel")
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                homeScreenModel.submitJoinSpace()
-                                                homeScreenModel.onDismissJoinDialog()
-                                            }
-                                        },
-                                        enabled = homeScreenModel.state.joinSpaceCode.isNotEmpty()
+                                    LoadingIndicator()
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(20.dp)
+                                        .widthIn(min = 280.dp, max = 360.dp)
+                                ) {
+                                    Text(
+                                        text = "空间分享code",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+
+                                    Spacer(Modifier.height(12.dp))
+
+                                    OutlinedTextField(
+                                        value = homeScreenModel.state.joinSpaceCode,
+                                        onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .focusRequester(focusRequester)
+                                    )
+
+                                    Spacer(Modifier.height(16.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
                                     ) {
-                                        Text("Join")
+                                        TextButton(onClick = { homeScreenModel.onDismissJoinDialog() }) {
+                                            Text("Cancel")
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    homeScreenModel.submitJoinSpace()
+                                                    homeScreenModel.onDismissJoinDialog()
+                                                }
+                                            },
+                                            enabled = homeScreenModel.state.joinSpaceCode.isNotEmpty()
+                                        ) {
+                                            Text("Join")
+                                        }
                                     }
                                 }
                             }
@@ -364,5 +397,6 @@ class HomeScreen : Screen {
                 }
             }
         }
+
     }
 }

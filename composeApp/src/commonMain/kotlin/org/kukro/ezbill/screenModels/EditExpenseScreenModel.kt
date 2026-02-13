@@ -14,7 +14,7 @@ import org.kukro.ezbill.models.Expense
 class EditExpenseScreenModel(
     val spaceId: String, val payerId: String
 ) : ScreenModel {
-    var state by mutableStateOf<EditExpenseUIState>(EditExpenseUIState.Loading)
+    var state by mutableStateOf<EditExpenseUIState>(EditExpenseUIState.Idle)
         private set
 
     var expenseAmountText by mutableStateOf("")
@@ -55,14 +55,21 @@ class EditExpenseScreenModel(
                 state = EditExpenseUIState.Error("金额不合法")
                 return@launch
             }
-            createExpense(expenseData)
-            onDone()
+
+            state = EditExpenseUIState.Loading
+            try {
+                createExpense(expenseData)
+                state = EditExpenseUIState.Success("创建成功")
+                onDone()
+            } catch (e: Throwable) {
+                state = EditExpenseUIState.Error(e.message ?: "创建失败")
+            }
         }
     }
-
 }
 
 sealed class EditExpenseUIState {
+    object Idle : EditExpenseUIState()
     object Loading : EditExpenseUIState()
     data class Success(val msg: String) : EditExpenseUIState()
     data class Error(val msg: String) : EditExpenseUIState()

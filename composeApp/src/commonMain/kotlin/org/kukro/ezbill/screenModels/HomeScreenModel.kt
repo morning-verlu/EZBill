@@ -36,6 +36,10 @@ class HomeScreenModel : ScreenModel {
 
     private var expensesChannel: RealtimeChannel? = null
 
+    var uiState by mutableStateOf<HomeUiState>(HomeUiState.Idle)
+        private set
+
+
     suspend fun subscribeExpenses(spaceId: String) {
         println("subscribeExpenses called, spaceId=$spaceId")
 
@@ -100,6 +104,7 @@ class HomeScreenModel : ScreenModel {
 
                     is SessionStatus.NotAuthenticated -> {
                         println("NotAuthenticated")
+                        clearState()
                         emitSnackBar("There's no session,sign in anonymously")
                         val username = generateUsername()
                         supabase.auth.signInAnonymously(
@@ -121,6 +126,15 @@ class HomeScreenModel : ScreenModel {
                 }
             }
         }
+    }
+
+    fun clearState() {
+        state = state.copy(
+            space = Space(
+                id = "",
+                code = "",
+            )
+        )
     }
 
     fun onMenuExpanded(expanded: Boolean) {
@@ -166,56 +180,101 @@ class HomeScreenModel : ScreenModel {
         state = state.copy(showCreateSpaceDialog = false, newSpaceName = "")
     }
 
+    private fun setLoading() {
+        uiState = HomeUiState.Loading
+    }
+
+    private fun setError(msg: String) {
+        uiState = HomeUiState.Error(msg)
+    }
+
+    private fun setIdle() {
+        uiState = HomeUiState.Idle
+    }
+
+
     suspend fun submitNewSpace() {
-        val space = SupabaseService.createSpace(state.newSpaceName)
-        onToggleSpace(space)
-        loadSpaces()
+        setLoading()
+        try {
+            val space = SupabaseService.createSpace(state.newSpaceName)
+            onToggleSpace(space)
+            loadSpaces()
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
+        }
+
     }
 
     suspend fun submitJoinSpace() {
-        val code: String = state.joinSpaceCode
-        if (code.isEmpty()) {
-            println("!!!! join code is empty !!!!")
-            return
+        setLoading()
+
+        try {
+            val code: String = state.joinSpaceCode
+            if (code.isEmpty()) {
+                println("!!!! join code is empty !!!!")
+                return
+            }
+
+            val space = supabase.postgrest.rpc(
+                "join_space_by_code",
+                mapOf(
+                    "p_code" to code,
+                    "p_display_name" to null
+                )
+            ).decodeAs<Space>()
+
+            state = state.copy(spaceList = state.spaceList + listOf(space))
+            onToggleSpace(space = space)
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
         }
-
-        val space = supabase.postgrest.rpc(
-            "join_space_by_code",
-            mapOf(
-                "p_code" to code,
-                "p_display_name" to null
-            )
-        ).decodeAs<Space>()
-
-        state = state.copy(spaceList = state.spaceList + listOf(space))
-        onToggleSpace(space = space)
     }
 
 
     suspend fun loadSpaces(): String? {
-        val myCreatedList = SupabaseService.fetchMyCreatedSpaces()
-        val myJoinedList = SupabaseService.fetchJoinedSpaces()
-        val merged = (myCreatedList + myJoinedList)
-            .distinctBy { it.id }
+        setLoading()
+        try {
+            val myCreatedList = SupabaseService.fetchMyCreatedSpaces()
+            val myJoinedList = SupabaseService.fetchJoinedSpaces()
+            val merged = (myCreatedList + myJoinedList)
+                .distinctBy { it.id }
 
-        state = if (merged.isNotEmpty()) {
-            state.copy(spaceList = merged, space = merged[0])
-        } else {
-            state.copy(spaceList = emptyList())
+            state = if (merged.isNotEmpty()) {
+                state.copy(spaceList = merged, space = merged[0])
+            } else {
+                state.copy(spaceList = emptyList())
+            }
+
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
         }
 
         return state.space.id.takeIf { it.isNotBlank() }
+
     }
 
     suspend fun loadExpenses(spaceId: String) {
-        val result = supabase.postgrest["expenses"]
-            .select {
-                filter { eq("space_id", spaceId) }
-                order("created_at", Order.DESCENDING)
-            }
+        setLoading()
+        try {
+            val result = supabase.postgrest["expenses"]
+                .select {
+                    filter { eq("space_id", spaceId) }
+                    order("created_at", Order.DESCENDING)
+                }
 
-        val list = result.decodeList<Expense>()
-        state = state.copy(expenses = list)
+            val list = result.decodeList<Expense>()
+            state = state.copy(expenses = list)
+        } catch (e: Exception) {
+            setError(e.message.toString())
+        } finally {
+            setIdle()
+        }
     }
 
 
@@ -240,6 +299,12 @@ data class HomeState(
     val spaceList: List<Space> = emptyList(),
     val expenses: List<Expense> = emptyList()
 )
+
+sealed class HomeUiState {
+    object Idle : HomeUiState()
+    object Loading : HomeUiState()
+    data class Error(val msg: String) : HomeUiState()
+}
 
 
 private fun generateUsername(): String {
