@@ -63,6 +63,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
@@ -237,8 +238,15 @@ class HomeScreen : Screen {
                             },
                         ) {
                             FloatingActionButtonMenuItem(
-                                onClick = { },
-                                text = { Text("结算分摊") },
+                                onClick = {
+                                    navigator?.push(
+                                        SettlementScreen(
+                                            spaceId = homeScreenModel.state.space.id,
+                                            members = homeScreenModel.state.spaceMembers,
+                                        )
+                                    )
+                                },
+                                text = { Text("结算") },
                                 icon = {
                                     Icon(
                                         Icons.Filled.TableChart,

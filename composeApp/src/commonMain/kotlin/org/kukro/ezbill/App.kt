@@ -9,7 +9,7 @@ import androidx.compose.runtime.remember
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import org.kukro.ezbill.screens.HomeScreen
-import org.kukro.ezbill.screens.LocalSnackBarHostState
+import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.ui.theme.EzBillTheme
 
 @Composable
