@@ -464,19 +464,23 @@ class HomeScreen : Screen {
                 )
 
                 Spacer(Modifier.height(16.dp))
-                Text("账单记录", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(16.dp))
 
-                LazyColumn {
-                    val memberNameMap = homeScreenModel.state.spaceMembers.associate { member ->
-                        member.userId to (member.displayName?.takeIf { it.isNotBlank() }
-                            ?: member.userId.take(6))
-                    }
-                    items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
-                        ExpenseItemCard(
-                            expense = expense,
-                            payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
-                        )
+                AnimatedVisibility(homeScreenModel.state.expenses.isNotEmpty()) {
+                    Text("账单记录", style = MaterialTheme.typography.titleMedium)
+
+                    Spacer(Modifier.height(16.dp))
+
+                    LazyColumn {
+                        val memberNameMap = homeScreenModel.state.spaceMembers.associate { member ->
+                            member.userId to (member.displayName?.takeIf { it.isNotBlank() }
+                                ?: member.userId.take(6))
+                        }
+                        items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
+                            ExpenseItemCard(
+                                expense = expense,
+                                payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
+                            )
+                        }
                     }
                 }
             }
@@ -566,15 +570,17 @@ fun MemberPreviewList(
     onViewAll: () -> Unit
 ) {
     val preview = members.take(maxCount)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("成员", style = MaterialTheme.typography.titleMedium)
-        if (members.size > maxCount) {
-            TextButton(onClick = onViewAll) {
-                Text("查看全部")
+    AnimatedVisibility(preview.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("成员", style = MaterialTheme.typography.titleMedium)
+            if (members.size > maxCount) {
+                TextButton(onClick = onViewAll) {
+                    Text("查看全部")
+                }
             }
         }
     }
