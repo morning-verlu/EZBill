@@ -30,14 +30,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -86,37 +85,42 @@ class HomeScreen : Screen {
             topBar = {
                 TopAppBar(
                     title = {
-                        Column(
-                            horizontalAlignment = Alignment.Start,
-                            modifier = Modifier
-                                .clickable { homeScreenModel.onSpaceListExpanded(true) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            tonalElevation = 0.dp,
+                            onClick = { homeScreenModel.onSpaceListExpanded(true) }
                         ) {
-                            Row {
-                                Text(
-                                    text = homeScreenModel.state.space.name ?: "Have fun",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (homeScreenModel.state.spaceList.isNotEmpty()) {
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                            Row {
-                                if (homeScreenModel.state.space.code.isNotEmpty()) {
+                            Column(
+                                horizontalAlignment = Alignment.Start,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Row {
                                     Text(
-                                        text = homeScreenModel.state.space.code,
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = homeScreenModel.state.space.name ?: "Have fun",
+                                        style = MaterialTheme.typography.titleMedium,
                                         maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
+                                    if (homeScreenModel.state.spaceList.isNotEmpty()) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null
+                                        )
+                                    }
                                 }
-
+                                Row {
+                                    if (homeScreenModel.state.space.code.isNotEmpty()) {
+                                        Text(
+                                            text = homeScreenModel.state.space.code,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
                             }
                         }
+
 
                         DropdownMenu(
                             expanded = homeScreenModel.state.spaceListExpanded,
@@ -377,15 +381,36 @@ class HomeScreen : Screen {
                 }
                 LazyColumn {
 
-                    items(homeScreenModel.state.spaceList) { space ->
-                        Text(space.toString())
-                        HorizontalFloatingToolbar(expanded = true) {
-                        }
-                    }
-
                     items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
-                        Text(expense.toString())
-                        HorizontalDivider(thickness = 10.dp)
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "¥${expense.amount}",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = expense.createdAt ?: "",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                                if (expense.note.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(expense.note, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Payer: ${expense.payerId.take(6)}...",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
                     }
                 }
             }
