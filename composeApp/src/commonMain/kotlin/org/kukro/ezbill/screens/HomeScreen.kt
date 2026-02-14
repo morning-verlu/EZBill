@@ -224,7 +224,12 @@ class HomeScreen : Screen {
                                         scope.launch {
                                             val bytes = picker.pickImageBytes()
                                             println("picked bytes = ${bytes?.size}")
-                                            hostState.showSnackbar("picked bytes = ${bytes?.size}")
+                                            bytes?.size?.let {
+                                                if (it > 5 * 1024 * 1024) {
+                                                    hostState.showSnackbar("不能大于5MB")
+                                                    return@launch
+                                                }
+                                            }
                                             bytes?.let {
                                                 homeScreenModel.updateAvatarOnly(it)
                                             }
