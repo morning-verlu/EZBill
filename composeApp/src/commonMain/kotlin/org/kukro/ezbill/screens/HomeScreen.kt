@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -51,8 +52,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
@@ -215,16 +218,18 @@ class HomeScreen : Screen {
                             AsyncImage(
                                 model = homeScreenModel.state.profile.avatarUrl,
                                 contentDescription = null,
-                                modifier = Modifier.size(48.dp).clickable(onClick = {
-                                    scope.launch {
-                                        val bytes = picker.pickImageBytes()
-                                        println("picked bytes = ${bytes?.size}")
-                                        hostState.showSnackbar("picked bytes = ${bytes?.size}")
-                                        bytes?.let {
-                                            homeScreenModel.updateAvatarOnly(it)
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(48.dp).clip(CircleShape)
+                                    .clickable(onClick = {
+                                        scope.launch {
+                                            val bytes = picker.pickImageBytes()
+                                            println("picked bytes = ${bytes?.size}")
+                                            hostState.showSnackbar("picked bytes = ${bytes?.size}")
+                                            bytes?.let {
+                                                homeScreenModel.updateAvatarOnly(it)
+                                            }
                                         }
-                                    }
-                                })
+                                    })
                             )
 
                         }
@@ -623,7 +628,8 @@ fun MemberPreviewList(
                 AsyncImage(
                     model = avatarUrl,
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp)
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(48.dp).clip(CircleShape)
                 )
                 Text(
                     text = displayName,
