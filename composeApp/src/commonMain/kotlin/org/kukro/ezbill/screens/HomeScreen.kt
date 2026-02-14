@@ -152,6 +152,7 @@ class HomeScreen : Screen {
                                                             homeScreenModel.state.space.code
                                                         )
                                                     )
+                                                    homeScreenModel.onSpaceListExpanded(false)
                                                 },
                                                 modifier = Modifier.size(20.dp)
                                             ) {

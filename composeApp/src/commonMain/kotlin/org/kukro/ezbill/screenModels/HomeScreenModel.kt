@@ -170,12 +170,7 @@ class HomeScreenModel : ScreenModel {
     }
 
     fun clearState() {
-        state = state.copy(
-            space = Space(
-                id = "",
-                code = "",
-            )
-        )
+        state = HomeState()
     }
 
     fun onMenuExpanded(expanded: Boolean) {
