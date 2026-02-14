@@ -26,9 +26,9 @@ import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.SupabaseService
 import org.kukro.ezbill.models.Expense
+import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
 import org.kukro.ezbill.models.SpaceMember
-import org.kukro.ezbill.models.UserInfo
 import kotlin.random.Random
 
 class HomeScreenModel : ScreenModel {
@@ -119,16 +119,19 @@ class HomeScreenModel : ScreenModel {
                         println("Authenticated")
                         emitSnackBar("login")
                         val user = supabase.auth.currentUserOrNull()
-                        val metaUsername = user?.userMetadata
-                            ?.get("username")
-                            ?.toString()
-                            ?.trim('"')
-                            .orEmpty()
+                        val profile = try {
+                            SupabaseService.getOrCreateMyProfile()
+                        } catch (e: Exception) {
+                            setError(e.message ?: "加载用户资料失败")
+                            Profile(
+                                userId = user?.id ?: "",
+                                username = "user-${user?.id?.take(6) ?: "guest"}",
+                                avatarUrl = AppConfig.DEFAULT_AVATAR
+                            )
+                        }
 
                         state = state.copy(
-                            userInfo = state.userInfo.copy(
-                                username = metaUsername.ifBlank { generateUsername() }
-                            ),
+                            profile = profile,
                             currentUserId = user?.id
                         )
 
@@ -152,11 +155,6 @@ class HomeScreenModel : ScreenModel {
                             data = mapOf(
                                 "username" to username,
                                 "avatar" to AppConfig.DEFAULT_AVATAR
-                            )
-                        )
-                        state = state.copy(
-                            userInfo = state.userInfo.copy(
-                                username = username
                             )
                         )
                     }
@@ -284,8 +282,7 @@ class HomeScreenModel : ScreenModel {
     suspend fun submitNewSpace() {
         setLoading()
         try {
-            val finalDisplayName = state.displayName.trim().ifBlank { state.userInfo.username }
-
+            val finalDisplayName = state.displayName.trim().ifBlank { state.profile.username }
             val space = SupabaseService.createSpace(state.newSpaceName, finalDisplayName)
             loadSpaces(selectedSpaceId = space.id)
             onToggleSpace(space)
@@ -306,7 +303,7 @@ class HomeScreenModel : ScreenModel {
                 println("!!!! join code is empty !!!!")
                 return
             }
-            val finalDisplayName = state.displayName.trim().ifBlank { state.userInfo.username }
+            val finalDisplayName = state.displayName.trim().ifBlank { state.profile.username }
 
             val space = supabase.postgrest.rpc(
                 "join_space_by_code",
@@ -374,6 +371,30 @@ class HomeScreenModel : ScreenModel {
     }
 
 
+    suspend fun updateUsernameOnly(username: String): Profile {
+        val profile = SupabaseService.saveProfile(username = username, avatarUrl = null)
+        state = state.copy(profile = profile)
+        return profile
+    }
+
+    suspend fun updateAvatarOnly(imageBytes: ByteArray): Profile {
+        val avatarUrl = SupabaseService.uploadAvatarBytes(imageBytes)
+        val profile = SupabaseService.saveProfile(username = null, avatarUrl = avatarUrl)
+        state = state.copy(profile = profile)
+        return profile
+    }
+
+    suspend fun updateProfileWithNewAvatar(
+        username: String,
+        imageBytes: ByteArray
+    ): Profile {
+        val avatarUrl = SupabaseService.uploadAvatarBytes(imageBytes)
+        val profile = SupabaseService.saveProfile(username = username, avatarUrl = avatarUrl)
+        state = state.copy(profile = profile)
+        return profile
+    }
+
+
     override fun onDispose() {
         screenModelScope.launch {
             expensesCollectJob?.cancel()
@@ -387,7 +408,7 @@ class HomeScreenModel : ScreenModel {
 
 data class HomeState(
     val currentUserId: String? = null,
-    var userInfo: UserInfo = UserInfo(username = ""),
+    var profile: Profile = Profile(),
     val menuExpanded: Boolean = false,
     val spaceListExpanded: Boolean = false,
     val showJoinSpaceDialog: Boolean = false,

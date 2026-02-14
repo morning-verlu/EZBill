@@ -1,6 +1,7 @@
 package org.kukro.ezbill.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +69,7 @@ import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
+import org.kukro.ezbill.rememberImagePicker
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
 
@@ -81,6 +83,7 @@ class HomeScreen : Screen {
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
+        val picker = rememberImagePicker()
 
 
         LaunchedEffect(Unit) {
@@ -208,13 +211,22 @@ class HomeScreen : Screen {
                                 }
                             }
 
-                            Column {
-                                AsyncImage(
-                                    model = homeScreenModel.state.userInfo.avatar,
-                                    modifier = Modifier.size(48.dp),
-                                    contentDescription = null,
-                                )
-                            }
+
+                            AsyncImage(
+                                model = homeScreenModel.state.profile.avatarUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp).clickable(onClick = {
+                                    scope.launch {
+                                        val bytes = picker.pickImageBytes()
+                                        println("picked bytes = ${bytes?.size}")
+                                        hostState.showSnackbar("picked bytes = ${bytes?.size}")
+                                        bytes?.let {
+                                            homeScreenModel.updateAvatarOnly(it)
+                                        }
+                                    }
+                                })
+                            )
+
                         }
                     }
                 )
@@ -455,8 +467,8 @@ class HomeScreen : Screen {
                     members = homeScreenModel.state.spaceMembers,
                     maxCount = 6,
                     currentUserId = homeScreenModel.state.currentUserId,
-                    currentUserName = homeScreenModel.state.userInfo.username,
-                    currentUserAvatar = homeScreenModel.state.userInfo.avatar,
+                    currentUserName = homeScreenModel.state.profile.username,
+                    currentUserAvatar = homeScreenModel.state.profile.avatarUrl,
                     onViewAll = {
                         homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
                             navigator?.push(MembersScreen(spaceId = it))
@@ -467,15 +479,17 @@ class HomeScreen : Screen {
                 Spacer(Modifier.height(16.dp))
 
                 AnimatedVisibility(homeScreenModel.state.expenses.isNotEmpty()) {
-                    Text("账单记录", style = MaterialTheme.typography.titleMedium)
-
-                    Spacer(Modifier.height(16.dp))
-
                     LazyColumn {
                         val memberNameMap = homeScreenModel.state.spaceMembers.associate { member ->
                             member.userId to (member.displayName?.takeIf { it.isNotBlank() }
                                 ?: member.userId.take(6))
                         }
+
+                        item {
+                            Text("账单记录", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(16.dp))
+                        }
+
                         items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
                             ExpenseItemCard(
                                 expense = expense,
@@ -566,7 +580,7 @@ fun MemberPreviewList(
     members: List<SpaceMember>,
     maxCount: Int = 5,
     currentUserId: String?,
-    currentUserName: String,
+    currentUserName: String?,
     currentUserAvatar: String,
     onViewAll: () -> Unit
 ) {
@@ -596,11 +610,12 @@ fun MemberPreviewList(
             } else {
                 AppConfig.DEFAULT_AVATAR
             }
-            val displayName = if (isCurrentUser && currentUserName.isNotBlank()) {
-                currentUserName
+            val displayName = if (isCurrentUser) {
+                currentUserName?.takeIf { it.isNotBlank() } ?: "我"
             } else {
                 user.displayName?.takeIf { it.isNotBlank() } ?: user.userId.take(6)
             }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
