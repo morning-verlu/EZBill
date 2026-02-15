@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.models.Expense
+import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
 import org.kukro.ezbill.models.SpaceMember
 import kotlin.random.Random
@@ -76,8 +77,10 @@ object AppSessionStore {
         try {
             val members = loadMembers(space.id)
             val expenses = loadExpenses(space.id)
+            val memberProfiles = loadProfilesForMembers(members, _state.value.profile)
             _state.value = _state.value.copy(
                 status = AppSessionStatus.Ready,
+                memberProfiles = memberProfiles,
                 members = members,
                 expenses = expenses
             )
@@ -108,18 +111,18 @@ object AppSessionStore {
     suspend fun updateAvatarOnly(imageBytes: ByteArray) {
         val avatarUrl = SupabaseService.uploadAvatarBytes(imageBytes)
         val profile = SupabaseService.saveProfile(avatarUrl = avatarUrl)
-        _state.value = _state.value.copy(profile = profile)
+        mergeProfile(profile)
     }
 
     suspend fun updateUsernameOnly(username: String) {
         val profile = SupabaseService.saveProfile(username = username)
-        _state.value = _state.value.copy(profile = profile)
+        mergeProfile(profile)
     }
 
     suspend fun updateProfileWithNewAvatar(username: String, imageBytes: ByteArray) {
         val avatarUrl = SupabaseService.uploadAvatarBytes(imageBytes)
         val profile = SupabaseService.saveProfile(username = username, avatarUrl = avatarUrl)
-        _state.value = _state.value.copy(profile = profile)
+        mergeProfile(profile)
     }
 
     suspend fun bootstrapAuthenticated(selectedSpaceId: String? = null) {
@@ -131,11 +134,13 @@ object AppSessionStore {
             val selected = selectSpace(spaces, selectedSpaceId)
             val members = selected?.id?.let { loadMembers(it) }.orEmpty()
             val expenses = selected?.id?.let { loadExpenses(it) }.orEmpty()
+            val memberProfiles = loadProfilesForMembers(members, profile)
 
             _state.value = AppSessionState(
                 status = AppSessionStatus.Ready,
                 currentUserId = currentUserId,
                 profile = profile,
+                memberProfiles = memberProfiles,
                 spaces = spaces,
                 selectedSpace = selected,
                 members = members,
@@ -209,7 +214,7 @@ object AppSessionStore {
                     table = "expenses"
                 }
                 .collect { payload ->
-                    val item = payload.decodeRecord<Expense>()
+                    val item = runCatching { payload.decodeRecord<Expense>() }.getOrNull() ?: return@collect
                     val current = _state.value
                     if (current.selectedSpace?.id != spaceId) return@collect
                     _state.value = current.copy(expenses = current.expenses + item)
@@ -228,11 +233,20 @@ object AppSessionStore {
                     filter("space_id", FilterOperator.EQ, spaceId)
                 }
                 .collect { payload ->
-                    val item = payload.decodeRecord<SpaceMember>()
+                    val item = runCatching { payload.decodeRecord<SpaceMember>() }.getOrNull() ?: return@collect
                     val current = _state.value
                     if (current.selectedSpace?.id != spaceId) return@collect
                     if (current.members.any { it.userId == item.userId }) return@collect
-                    _state.value = current.copy(members = current.members + item)
+                    val profile = loadProfileByUserId(item.userId)
+                    val updatedProfiles = if (profile != null) {
+                        current.memberProfiles + (item.userId to profile)
+                    } else {
+                        current.memberProfiles
+                    }
+                    _state.value = current.copy(
+                        members = current.members + item,
+                        memberProfiles = updatedProfiles
+                    )
                 }
         }
         scope.launch { channel.subscribe() }
@@ -249,6 +263,37 @@ object AppSessionStore {
             expensesChannel = null
             membersChannel = null
         }
+    }
+
+    private suspend fun loadProfilesForMembers(
+        members: List<SpaceMember>,
+        currentProfile: Profile?
+    ): Map<String, Profile> {
+        val map = mutableMapOf<String, Profile>()
+        currentProfile?.let { if (it.userId.isNotBlank()) map[it.userId] = it }
+        for (member in members) {
+            if (map.containsKey(member.userId)) continue
+            loadProfileByUserId(member.userId)?.let { map[member.userId] = it }
+        }
+        return map
+    }
+
+    private suspend fun loadProfileByUserId(userId: String): Profile? {
+        val rows = supabase.postgrest["profiles"].select {
+            filter { eq("user_id", userId) }
+            limit(1)
+        }.decodeList<Profile>()
+        return rows.firstOrNull()
+    }
+
+    private fun mergeProfile(profile: Profile) {
+        val current = _state.value
+        val uid = profile.userId
+        val updatedMap = if (uid.isBlank()) current.memberProfiles else {
+            current.memberProfiles + (uid to profile)
+        }
+        val updatedCurrentProfile = if (current.currentUserId == uid) profile else current.profile
+        _state.value = current.copy(profile = updatedCurrentProfile, memberProfiles = updatedMap)
     }
 }
 

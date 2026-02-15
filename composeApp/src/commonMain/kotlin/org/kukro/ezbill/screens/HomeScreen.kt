@@ -489,8 +489,7 @@ class HomeScreen : Screen {
                     members = homeScreenModel.state.spaceMembers,
                     maxCount = 6,
                     currentUserId = homeScreenModel.state.currentUserId,
-                    currentUserName = homeScreenModel.state.profile.username,
-                    currentUserAvatar = homeScreenModel.state.profile.avatarUrl,
+                    memberProfiles = homeScreenModel.state.memberProfiles,
                     onViewAll = {
                         homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
                             navigator?.push(MembersScreen(spaceId = it))
@@ -602,8 +601,7 @@ fun MemberPreviewList(
     members: List<SpaceMember>,
     maxCount: Int = 5,
     currentUserId: String?,
-    currentUserName: String?,
-    currentUserAvatar: String,
+    memberProfiles: Map<String, org.kukro.ezbill.models.Profile>,
     onViewAll: () -> Unit
 ) {
     val preview = members.take(maxCount)
@@ -627,16 +625,11 @@ fun MemberPreviewList(
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(preview, key = { it.userId }) { user ->
             val isCurrentUser = user.userId == currentUserId
-            val avatarUrl = if (isCurrentUser) {
-                currentUserAvatar
-            } else {
-                AppConfig.DEFAULT_AVATAR
-            }
-            val displayName = if (isCurrentUser) {
-                currentUserName?.takeIf { it.isNotBlank() } ?: "我"
-            } else {
-                user.displayName?.takeIf { it.isNotBlank() } ?: user.userId.take(6)
-            }
+            val profile = memberProfiles[user.userId]
+            val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: AppConfig.DEFAULT_AVATAR
+            val displayName = user.displayName?.takeIf { it.isNotBlank() }
+                ?: profile?.username?.takeIf { it.isNotBlank() }
+                ?: if (isCurrentUser) "我" else user.userId.take(6)
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

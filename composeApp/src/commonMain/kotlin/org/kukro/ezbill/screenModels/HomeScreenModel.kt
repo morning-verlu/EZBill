@@ -37,6 +37,7 @@ class HomeScreenModel : ScreenModel {
                     profile = appState.profile ?: Profile(),
                     spaceList = appState.spaces,
                     space = appState.selectedSpace ?: Space(id = "", code = ""),
+                    memberProfiles = appState.memberProfiles,
                     spaceMembers = appState.members,
                     expenses = appState.expenses
                 )
@@ -191,6 +192,7 @@ data class HomeState(
     val spaceList: List<Space> = emptyList(),
     val expenses: List<Expense> = emptyList(),
     val expandedFabButtons: Boolean = false,
+    val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaceMembers: List<SpaceMember> = emptyList(),
     val isAvatarUploading: Boolean = false
 )

@@ -17,6 +17,7 @@ data class AppSessionState(
     val status: AppSessionStatus = AppSessionStatus.Initializing,
     val currentUserId: String? = null,
     val profile: Profile? = null,
+    val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaces: List<Space> = emptyList(),
     val selectedSpace: Space? = null,
     val members: List<SpaceMember> = emptyList(),
