@@ -38,6 +38,7 @@ import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -312,6 +313,14 @@ class HomeScreen : Screen {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
+                AnimatedVisibility(homeScreenModel.state.isAvatarUploading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
+                if (homeScreenModel.state.isAvatarUploading) {
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 if (homeScreenModel.state.showCreateSpaceDialog) {
                     Dialog(
                         onDismissRequest = {

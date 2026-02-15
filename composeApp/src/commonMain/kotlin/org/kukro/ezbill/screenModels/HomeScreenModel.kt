@@ -154,8 +154,18 @@ class HomeScreenModel : ScreenModel {
     }
 
     suspend fun updateAvatarOnly(imageBytes: ByteArray): Profile {
-        AppSessionStore.updateAvatarOnly(imageBytes)
-        return state.profile
+        state = state.copy(isAvatarUploading = true)
+        emitSnackBar("开始上传头像...")
+        return try {
+            AppSessionStore.updateAvatarOnly(imageBytes)
+            emitSnackBar("头像更新成功")
+            state.profile
+        } catch (e: Exception) {
+            emitSnackBar("头像更新失败: ${e.message ?: "unknown error"}")
+            state.profile
+        } finally {
+            state = state.copy(isAvatarUploading = false)
+        }
     }
 
     suspend fun updateProfileWithNewAvatar(
@@ -181,7 +191,8 @@ data class HomeState(
     val spaceList: List<Space> = emptyList(),
     val expenses: List<Expense> = emptyList(),
     val expandedFabButtons: Boolean = false,
-    val spaceMembers: List<SpaceMember> = emptyList()
+    val spaceMembers: List<SpaceMember> = emptyList(),
+    val isAvatarUploading: Boolean = false
 )
 
 sealed class HomeUiState {
