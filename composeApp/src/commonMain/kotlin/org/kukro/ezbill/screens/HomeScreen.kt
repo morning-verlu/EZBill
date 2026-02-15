@@ -269,6 +269,7 @@ class HomeScreen : Screen {
                         ) {
                             FloatingActionButtonMenuItem(
                                 onClick = {
+                                    homeScreenModel.onExpandedFabButtons(false)
                                     navigator?.push(
                                         SettlementScreen(
                                             spaceId = homeScreenModel.state.space.id,
@@ -287,6 +288,7 @@ class HomeScreen : Screen {
 
                             FloatingActionButtonMenuItem(
                                 onClick = {
+                                    homeScreenModel.onExpandedFabButtons(false)
                                     val userId = homeScreenModel.state.currentUserId
                                         ?: return@FloatingActionButtonMenuItem
                                     navigator?.push(

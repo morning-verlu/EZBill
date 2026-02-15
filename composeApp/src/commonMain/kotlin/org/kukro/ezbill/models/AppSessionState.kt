@@ -1,9 +1,4 @@
-package org.kukro.ezbill
-
-import org.kukro.ezbill.models.Expense
-import org.kukro.ezbill.models.Profile
-import org.kukro.ezbill.models.Space
-import org.kukro.ezbill.models.SpaceMember
+package org.kukro.ezbill.models
 
 sealed interface AppSessionStatus {
     data object Initializing : AppSessionStatus

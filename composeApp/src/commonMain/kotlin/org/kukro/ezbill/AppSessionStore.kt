@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.SupabaseClient.supabase
+import org.kukro.ezbill.models.AppSessionState
+import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
