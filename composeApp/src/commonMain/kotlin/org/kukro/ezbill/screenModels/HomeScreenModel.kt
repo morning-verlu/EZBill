@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.AppSessionStore
+import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
@@ -39,7 +40,9 @@ class HomeScreenModel : ScreenModel {
                     space = appState.selectedSpace ?: Space(id = "", code = ""),
                     memberProfiles = appState.memberProfiles,
                     spaceMembers = appState.members,
-                    expenses = appState.expenses
+                    expenses = appState.expenses,
+                    isDataLoading = appState.status is AppSessionStatus.Initializing
+                            || appState.status is AppSessionStatus.Loading
                 )
             }
         }
@@ -194,7 +197,8 @@ data class HomeState(
     val expandedFabButtons: Boolean = false,
     val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaceMembers: List<SpaceMember> = emptyList(),
-    val isAvatarUploading: Boolean = false
+    val isAvatarUploading: Boolean = false,
+    val isDataLoading: Boolean = false
 )
 
 sealed class HomeUiState {

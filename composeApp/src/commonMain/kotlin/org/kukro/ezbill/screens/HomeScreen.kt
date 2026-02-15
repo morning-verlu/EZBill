@@ -315,11 +315,13 @@ class HomeScreen : Screen {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
-                AnimatedVisibility(homeScreenModel.state.isAvatarUploading) {
+                val showTopLoading = homeScreenModel.state.isAvatarUploading || homeScreenModel.state.isDataLoading
+
+                AnimatedVisibility(showTopLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
 
-                if (homeScreenModel.state.isAvatarUploading) {
+                if (showTopLoading) {
                     Spacer(Modifier.height(8.dp))
                 }
 
