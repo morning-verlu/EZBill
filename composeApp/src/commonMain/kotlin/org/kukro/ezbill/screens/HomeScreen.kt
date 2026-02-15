@@ -178,14 +178,17 @@ class HomeScreen : Screen {
                         }
                     },
                     actions = {
-                        Row {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Column {
                                 IconButton(onClick = {
                                     homeScreenModel.onMenuExpanded(true)
                                 }) {
                                     Icon(
                                         imageVector = Icons.Outlined.AddCircleOutline,
-                                        contentDescription = "Add"
+                                        contentDescription = "Add",
+                                        modifier = Modifier
                                     )
                                 }
                                 DropdownMenu(
@@ -219,7 +222,7 @@ class HomeScreen : Screen {
                                 model = homeScreenModel.state.profile.avatarUrl,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(48.dp).clip(CircleShape)
+                                modifier = Modifier.size(40.dp).clip(CircleShape)
                                     .clickable(onClick = {
                                         scope.launch {
                                             val bytes = picker.pickImageBytes()
