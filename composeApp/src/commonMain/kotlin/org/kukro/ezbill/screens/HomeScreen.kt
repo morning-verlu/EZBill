@@ -37,7 +37,6 @@ import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -315,7 +314,10 @@ class HomeScreen : Screen {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
-                val showTopLoading = homeScreenModel.state.isAvatarUploading || homeScreenModel.state.isDataLoading
+                val showTopLoading =
+                    homeScreenModel.state.isAvatarUploading
+                            || homeScreenModel.state.isDataLoading
+                            || homeScreenModel.uiState is HomeUiState.Loading
 
                 AnimatedVisibility(showTopLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -346,61 +348,57 @@ class HomeScreen : Screen {
                                     .padding(20.dp)
                                     .widthIn(min = 280.dp, max = 360.dp)
                             ) {
-                                if (homeScreenModel.uiState is HomeUiState.Loading) {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        LoadingIndicator()
+                                Text(
+                                    text = "创建空间",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.newSpaceName,
+                                    onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
+                                    singleLine = true,
+                                    placeholder = { Text("空间名称") },
+                                    modifier = Modifier.fillMaxWidth()
+                                        .focusRequester(focusRequester)
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.displayName,
+                                    onValueChange = { homeScreenModel.onDisplayNameChange(it) },
+                                    singleLine = true,
+                                    placeholder = { Text("你在空间的昵称") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    TextButton(onClick = { homeScreenModel.onDismissCreateDialog() }) {
+                                        Text("Cancel")
                                     }
-                                } else {
-                                    Text(
-                                        text = "创建空间",
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-
-                                    Spacer(Modifier.height(12.dp))
-
-                                    OutlinedTextField(
-                                        value = homeScreenModel.state.newSpaceName,
-                                        onValueChange = { homeScreenModel.onNewSpaceNameChange(it) },
-                                        singleLine = true,
-                                        placeholder = { Text("空间名称") },
-                                        modifier = Modifier.fillMaxWidth()
-                                            .focusRequester(focusRequester)
-                                    )
-
-                                    Spacer(Modifier.height(12.dp))
-
-                                    OutlinedTextField(
-                                        value = homeScreenModel.state.displayName,
-                                        onValueChange = { homeScreenModel.onDisplayNameChange(it) },
-                                        singleLine = true,
-                                        placeholder = { Text("你在空间的昵称") },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    Spacer(Modifier.height(16.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            val newSpaceName = homeScreenModel.state.newSpaceName
+                                            val displayName = homeScreenModel.state.displayName
+                                            homeScreenModel.onDismissCreateDialog()
+                                            scope.launch {
+                                                homeScreenModel.submitNewSpace(
+                                                    newSpaceName = newSpaceName,
+                                                    displayName = displayName
+                                                )
+                                            }
+                                        },
+                                        enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
                                     ) {
-                                        TextButton(onClick = { homeScreenModel.onDismissCreateDialog() }) {
-                                            Text("Cancel")
-                                        }
-                                        Spacer(Modifier.width(8.dp))
-                                        Button(
-                                            onClick = {
-                                                scope.launch {
-                                                    homeScreenModel.submitNewSpace()
-                                                    homeScreenModel.onDismissCreateDialog()
-                                                }
-                                            },
-                                            enabled = homeScreenModel.state.newSpaceName.isNotEmpty()
-                                        ) {
-                                            Text("Create")
-                                        }
+                                        Text("Create")
                                     }
                                 }
 
@@ -423,66 +421,62 @@ class HomeScreen : Screen {
                         Card(
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            if (homeScreenModel.uiState is HomeUiState.Loading) {
-                                Box(
+                            Column(
+                                modifier = Modifier
+                                    .padding(20.dp)
+                                    .widthIn(min = 280.dp, max = 360.dp)
+                            ) {
+                                Text(
+                                    text = "加入空间",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.joinSpaceCode,
+                                    onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
+                                    singleLine = true,
+                                    placeholder = { Text("分享码") },
+                                    modifier = Modifier.fillMaxWidth()
+                                        .focusRequester(focusRequester)
+                                )
+
+                                Spacer(Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = homeScreenModel.state.displayName,
+                                    onValueChange = { homeScreenModel.onDisplayNameChange(it) },
+                                    singleLine = true,
+                                    placeholder = { Text("你在空间的昵称") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(Modifier.height(16.dp))
+
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
+                                    horizontalArrangement = Arrangement.End
                                 ) {
-                                    LoadingIndicator()
-                                }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .padding(20.dp)
-                                        .widthIn(min = 280.dp, max = 360.dp)
-                                ) {
-                                    Text(
-                                        text = "加入空间",
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-
-                                    Spacer(Modifier.height(12.dp))
-
-                                    OutlinedTextField(
-                                        value = homeScreenModel.state.joinSpaceCode,
-                                        onValueChange = { homeScreenModel.onJoinSpaceCodeChange(it) },
-                                        singleLine = true,
-                                        placeholder = { Text("分享码") },
-                                        modifier = Modifier.fillMaxWidth()
-                                            .focusRequester(focusRequester)
-                                    )
-
-                                    Spacer(Modifier.height(12.dp))
-
-                                    OutlinedTextField(
-                                        value = homeScreenModel.state.displayName,
-                                        onValueChange = { homeScreenModel.onDisplayNameChange(it) },
-                                        singleLine = true,
-                                        placeholder = { Text("你在空间的昵称") },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    Spacer(Modifier.height(16.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End
+                                    TextButton(onClick = { homeScreenModel.onDismissJoinDialog() }) {
+                                        Text("Cancel")
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(
+                                        onClick = {
+                                            val joinCode = homeScreenModel.state.joinSpaceCode
+                                            val displayName = homeScreenModel.state.displayName
+                                            homeScreenModel.onDismissJoinDialog()
+                                            scope.launch {
+                                                homeScreenModel.submitJoinSpace(
+                                                    code = joinCode,
+                                                    displayName = displayName
+                                                )
+                                            }
+                                        },
+                                        enabled = homeScreenModel.state.joinSpaceCode.isNotEmpty()
                                     ) {
-                                        TextButton(onClick = { homeScreenModel.onDismissJoinDialog() }) {
-                                            Text("Cancel")
-                                        }
-                                        Spacer(Modifier.width(8.dp))
-                                        Button(
-                                            onClick = {
-                                                scope.launch {
-                                                    homeScreenModel.submitJoinSpace()
-                                                    homeScreenModel.onDismissJoinDialog()
-                                                }
-                                            },
-                                            enabled = homeScreenModel.state.joinSpaceCode.isNotEmpty()
-                                        ) {
-                                            Text("Join")
-                                        }
+                                        Text("Join")
                                     }
                                 }
                             }

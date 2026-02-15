@@ -121,11 +121,14 @@ class HomeScreenModel : ScreenModel {
         uiState = HomeUiState.Idle
     }
 
-    suspend fun submitNewSpace() {
+    suspend fun submitNewSpace(
+        newSpaceName: String = state.newSpaceName,
+        displayName: String = state.displayName
+    ) {
         setLoading()
         try {
-            val finalDisplayName = state.displayName.trim().ifBlank { state.profile.username }
-            AppSessionStore.createSpace(state.newSpaceName, finalDisplayName)
+            val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
+            AppSessionStore.createSpace(newSpaceName, finalDisplayName)
             emitSnackBar("创建成功")
         } catch (e: Exception) {
             setError(e.message.toString())
@@ -134,15 +137,17 @@ class HomeScreenModel : ScreenModel {
         }
     }
 
-    suspend fun submitJoinSpace() {
+    suspend fun submitJoinSpace(
+        code: String = state.joinSpaceCode,
+        displayName: String = state.displayName
+    ) {
         setLoading()
         try {
-            val code = state.joinSpaceCode
             if (code.isBlank()) {
                 emitSnackBar("分享码不能为空")
                 return
             }
-            val finalDisplayName = state.displayName.trim().ifBlank { state.profile.username }
+            val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
             AppSessionStore.joinSpace(code, finalDisplayName)
             emitSnackBar("加入成功")
         } catch (e: Exception) {
