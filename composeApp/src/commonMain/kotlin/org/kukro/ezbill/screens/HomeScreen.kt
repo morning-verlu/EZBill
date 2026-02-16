@@ -224,19 +224,27 @@ class HomeScreen : Screen {
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.size(40.dp).clip(CircleShape)
                                     .clickable(onClick = {
-                                        scope.launch {
-                                            val bytes = picker.pickImageBytes()
-                                            println("picked bytes = ${bytes?.size}")
-                                            bytes?.size?.let {
-                                                if (it > 5 * 1024 * 1024) {
-                                                    hostState.showSnackbar("不能大于5MB")
-                                                    return@launch
-                                                }
-                                            }
-                                            bytes?.let {
-                                                homeScreenModel.updateAvatarOnly(it)
-                                            }
+                                        homeScreenModel.state.currentUserId?.let {
+                                            navigator?.push(
+                                                UserDetailScreen(
+                                                    userId = it
+                                                )
+                                            )
                                         }
+
+//                                        scope.launch {
+//                                            val bytes = picker.pickImageBytes()
+//                                            println("picked bytes = ${bytes?.size}")
+//                                            bytes?.size?.let {
+//                                                if (it > 5 * 1024 * 1024) {
+//                                                    hostState.showSnackbar("不能大于5MB")
+//                                                    return@launch
+//                                                }
+//                                            }
+//                                            bytes?.let {
+//                                                homeScreenModel.updateAvatarOnly(it)
+//                                            }
+//                                        }
                                     })
                             )
 
@@ -624,7 +632,8 @@ fun MemberPreviewList(
         items(preview, key = { it.userId }) { user ->
             val isCurrentUser = user.userId == currentUserId
             val profile = memberProfiles[user.userId]
-            val avatarUrl = profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: AppConfig.DEFAULT_AVATAR
+            val avatarUrl =
+                profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: AppConfig.DEFAULT_AVATAR
             val displayName = user.displayName?.takeIf { it.isNotBlank() }
                 ?: profile?.username?.takeIf { it.isNotBlank() }
                 ?: if (isCurrentUser) "我" else user.userId.take(6)
