@@ -1,5 +1,6 @@
 package org.kukro.ezbill.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,30 +12,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.screenModels.UserDetailScreenModel
 
 class UserDetailScreen(
@@ -45,6 +56,13 @@ class UserDetailScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val userDetailScreenModel = rememberScreenModel { UserDetailScreenModel() }
+        val hostState = LocalSnackBarHostState.current
+
+        LaunchedEffect(Unit) {
+            userDetailScreenModel.snackBar.collect { msg ->
+                hostState.showSnackbar(msg)
+            }
+        }
 
         Scaffold(
             bottomBar = {
@@ -68,6 +86,9 @@ class UserDetailScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
+                AnimatedVisibility(userDetailScreenModel.state.showTopLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -129,13 +150,85 @@ class UserDetailScreen(
                 )
 
                 Button(
-                    onClick = {},
+                    onClick = {
+                        userDetailScreenModel.onShowUpdateUserDialog(true)
+                    },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                 ) {
                     Icon(imageVector = Icons.Filled.Upgrade, "upgrade")
                     Text("升级为正式账户")
                 }
 
+                if (userDetailScreenModel.state.showUpdateUserDialog) {
+                    UpdateUserDialog(userDetailScreenModel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
+    Dialog(
+        onDismissRequest = {
+            userDetailScreenModel.onShowUpdateUserDialog(false)
+        }
+    ) {
+        Card {
+            Column {
+                Text(
+                    "Update Account",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                )
+                TextField(
+                    value = userDetailScreenModel.state.updateUserInput.email,
+                    onValueChange = { userDetailScreenModel.onUpdateUserInputEmailChange(it) },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    placeholder = { Text("请输入邮箱地址") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    singleLine = true
+                )
+                TextField(
+                    value = userDetailScreenModel.state.updateUserInput.password,
+                    onValueChange = { userDetailScreenModel.onUpdateUserInputPasswordChange(it) },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    placeholder = { Text("请输入密码") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true
+                )
+                TextField(
+                    value = userDetailScreenModel.state.updateUserInput.confirmPassword,
+                    onValueChange = {
+                        userDetailScreenModel.onUpdateUserInputConfirmPasswordChange(
+                            it
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    placeholder = { Text("请确认密码") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true
+                )
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    TextButton(onClick = {
+                        userDetailScreenModel.onDismissUpdateUserDialog()
+                    }) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Button(onClick = {
+                        userDetailScreenModel.updateUser()
+                        userDetailScreenModel.onDismissUpdateUserDialog()
+                    }) {
+                        Text("Confirm")
+                    }
+                }
             }
         }
     }

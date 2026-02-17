@@ -139,4 +139,11 @@ object SupabaseService {
         return rows.firstOrNull()
     }
 
+    suspend fun updateUser(uEmail: String, uPassword: String) {
+        supabase.auth.updateUser {
+            email = uEmail
+            password = uPassword
+        }
+    }
+
 }
