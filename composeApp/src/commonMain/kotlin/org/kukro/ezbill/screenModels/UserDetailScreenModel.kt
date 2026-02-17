@@ -55,7 +55,8 @@ class UserDetailScreenModel : ScreenModel {
         state = state.copy(
             updateUserInput = state.updateUserInput.copy(
                 email = email
-            )
+            ),
+            emailError = null
         )
     }
 
@@ -63,7 +64,9 @@ class UserDetailScreenModel : ScreenModel {
         state = state.copy(
             updateUserInput = state.updateUserInput.copy(
                 password = password
-            )
+            ),
+            passwordError = null,
+            confirmPasswordError = null
         )
     }
 
@@ -71,8 +74,17 @@ class UserDetailScreenModel : ScreenModel {
         state = state.copy(
             updateUserInput = state.updateUserInput.copy(
                 confirmPassword = confirmPassword
-            )
+            ),
+            confirmPasswordError = null
         )
+    }
+
+    fun onTogglePasswordVisible() {
+        state = state.copy(showPasswordVisible = !state.showPasswordVisible)
+    }
+
+    fun onToggleConfirmPasswordVisible() {
+        state = state.copy(showConfirmPasswordVisible = !state.showConfirmPasswordVisible)
     }
 
     fun onDismissUpdateUserDialog() {
@@ -83,28 +95,81 @@ class UserDetailScreenModel : ScreenModel {
                 password = "",
                 confirmPassword = ""
             ),
+            emailError = null,
+            passwordError = null,
+            confirmPasswordError = null,
+            showPasswordVisible = false,
+            showConfirmPasswordVisible = false
         )
     }
 
     fun updateUser() {
-        val uEmail = state.updateUserInput.email
+        if (!validateUpdateInput()) return
+        val uEmail = state.updateUserInput.email.trim()
         val uPassword = state.updateUserInput.password
-        if (uEmail.isEmpty() || uPassword.isEmpty()) return
-        try {
+
+        screenModelScope.launch {
             onShowTopLoading(true)
-            screenModelScope.launch {
+            emitSnackBar("开始升级账户...")
+            try {
                 SupabaseService.updateUser(uEmail, uPassword)
+                emitSnackBar("升级成功，请检查邮箱完成验证")
+                onDismissUpdateUserDialog()
+            } catch (e: Exception) {
+                emitSnackBar("升级失败: ${e.message ?: "unknown error"}")
+            } finally {
                 onShowTopLoading(false)
-                emitSnackBar("update successfully")
             }
-        } catch (e: Exception) {
-            println("updateUser" + e.message)
-            onShowTopLoading(false)
-            screenModelScope.launch {
-                emitSnackBar("update failed")
+        }
+    }
+
+    private fun validateUpdateInput(): Boolean {
+        val email = state.updateUserInput.email.trim()
+        val password = state.updateUserInput.password
+        val confirm = state.updateUserInput.confirmPassword
+
+        var emailError: String? = null
+        var passwordError: String? = null
+        var confirmError: String? = null
+
+        val emailRegex = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+        if (email.isBlank()) {
+            emailError = "请输入邮箱地址"
+        } else if (!emailRegex.matches(email)) {
+            emailError = "邮箱格式不正确"
+        }
+
+        val minPasswordLength = 8
+        val maxPasswordLength = 64
+        if (password.isBlank()) {
+            passwordError = "请输入密码"
+        } else if (password.length < minPasswordLength) {
+            passwordError = "密码至少 8 位"
+        } else if (password.length > maxPasswordLength) {
+            passwordError = "密码不能超过 64 位"
+        } else if (password.any { it.isWhitespace() }) {
+            passwordError = "密码不能包含空格"
+        } else {
+            val hasLetter = password.any { it.isLetter() }
+            val hasDigit = password.any { it.isDigit() }
+            if (!hasLetter || !hasDigit) {
+                passwordError = "密码需包含字母和数字"
             }
         }
 
+        if (confirm.isBlank()) {
+            confirmError = "请确认密码"
+        } else if (confirm != password) {
+            confirmError = "两次输入密码不一致"
+        }
+
+        state = state.copy(
+            emailError = emailError,
+            passwordError = passwordError,
+            confirmPasswordError = confirmError
+        )
+
+        return emailError == null && passwordError == null && confirmError == null
     }
 
 }
@@ -120,7 +185,12 @@ data class UserDetailState(
     val updateUserInput: UpdateUserInput = UpdateUserInput(
         email = "", password = "", confirmPassword = ""
     ),
-    val showTopLoading: Boolean = false
+    val showTopLoading: Boolean = false,
+    val showPasswordVisible: Boolean = false,
+    val showConfirmPasswordVisible: Boolean = false,
+    val emailError: String? = null,
+    val passwordError: String? = null,
+    val confirmPasswordError: String? = null
 )
 
 data class UpdateUserInput(

@@ -18,6 +18,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Upgrade
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,10 +27,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -171,7 +173,7 @@ class UserDetailScreen(
 private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
     Dialog(
         onDismissRequest = {
-            userDetailScreenModel.onShowUpdateUserDialog(false)
+            userDetailScreenModel.onDismissUpdateUserDialog()
         }
     ) {
         Card {
@@ -182,24 +184,51 @@ private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(16.dp)
                 )
-                TextField(
+                OutlinedTextField(
                     value = userDetailScreenModel.state.updateUserInput.email,
                     onValueChange = { userDetailScreenModel.onUpdateUserInputEmailChange(it) },
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    label = { Text("邮箱") },
                     placeholder = { Text("请输入邮箱地址") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    singleLine = true
+                    singleLine = true,
+                    isError = userDetailScreenModel.state.emailError != null,
+                    supportingText = {
+                        userDetailScreenModel.state.emailError?.let { Text(it) }
+                    }
                 )
-                TextField(
+                OutlinedTextField(
                     value = userDetailScreenModel.state.updateUserInput.password,
                     onValueChange = { userDetailScreenModel.onUpdateUserInputPasswordChange(it) },
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    label = { Text("密码") },
                     placeholder = { Text("请输入密码") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (userDetailScreenModel.state.showPasswordVisible) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { userDetailScreenModel.onTogglePasswordVisible() }) {
+                            Icon(
+                                imageVector = if (userDetailScreenModel.state.showPasswordVisible) {
+                                    Icons.Filled.VisibilityOff
+                                } else {
+                                    Icons.Filled.Visibility
+                                },
+                                contentDescription = "toggle password visibility"
+                            )
+                        }
+                    },
+                    isError = userDetailScreenModel.state.passwordError != null,
+                    supportingText = {
+                        userDetailScreenModel.state.passwordError?.let { Text(it) }
+                            ?: Text("8-64位，至少包含字母和数字")
+                    }
                 )
-                TextField(
+                OutlinedTextField(
                     value = userDetailScreenModel.state.updateUserInput.confirmPassword,
                     onValueChange = {
                         userDetailScreenModel.onUpdateUserInputConfirmPasswordChange(
@@ -207,10 +236,32 @@ private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
                         )
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    label = { Text("确认密码") },
                     placeholder = { Text("请确认密码") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (userDetailScreenModel.state.showConfirmPasswordVisible) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { userDetailScreenModel.onToggleConfirmPasswordVisible() }) {
+                            Icon(
+                                imageVector = if (userDetailScreenModel.state.showConfirmPasswordVisible) {
+                                    Icons.Filled.VisibilityOff
+                                } else {
+                                    Icons.Filled.Visibility
+                                },
+                                contentDescription = "toggle confirm password visibility"
+                            )
+                        }
+                    },
+                    isError = userDetailScreenModel.state.confirmPasswordError != null,
+                    supportingText = {
+                        userDetailScreenModel.state.confirmPasswordError?.let { Text(it) }
+                            ?: Text("需要与密码保持一致")
+                    }
                 )
                 Row(
                     horizontalArrangement = Arrangement.End,
@@ -224,7 +275,6 @@ private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(onClick = {
                         userDetailScreenModel.updateUser()
-                        userDetailScreenModel.onDismissUpdateUserDialog()
                     }) {
                         Text("Confirm")
                     }
