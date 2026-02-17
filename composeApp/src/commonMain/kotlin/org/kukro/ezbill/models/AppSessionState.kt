@@ -11,6 +11,7 @@ sealed interface AppSessionStatus {
 data class AppSessionState(
     val status: AppSessionStatus = AppSessionStatus.Initializing,
     val currentUserId: String? = null,
+    val isAnonymousUser: Boolean = false,
     val profile: Profile? = null,
     val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaces: List<Space> = emptyList(),

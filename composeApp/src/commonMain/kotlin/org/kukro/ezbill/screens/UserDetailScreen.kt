@@ -151,14 +151,16 @@ class UserDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Button(
-                    onClick = {
-                        userDetailScreenModel.onShowUpdateUserDialog(true)
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                ) {
-                    Icon(imageVector = Icons.Filled.Upgrade, "upgrade")
-                    Text("升级为正式账户")
+                if (userDetailScreenModel.state.isAnonymousUser) {
+                    Button(
+                        onClick = {
+                            userDetailScreenModel.onShowUpdateUserDialog(true)
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Upgrade, "upgrade")
+                        Text("升级为正式账户")
+                    }
                 }
 
                 if (userDetailScreenModel.state.showUpdateUserDialog) {

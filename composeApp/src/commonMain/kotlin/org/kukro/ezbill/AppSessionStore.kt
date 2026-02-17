@@ -130,7 +130,19 @@ object AppSessionStore {
     suspend fun bootstrapAuthenticated(selectedSpaceId: String? = null) {
         _state.value = _state.value.copy(status = AppSessionStatus.Loading)
         try {
-            val currentUserId = supabase.auth.currentUserOrNull()?.id
+            val authUser = supabase.auth.currentUserOrNull()
+            val currentUserId = authUser?.id
+            val provider = authUser?.appMetadata
+                ?.get("provider")
+                ?.toString()
+                ?.trim('"')
+                ?.lowercase()
+            val providers = authUser?.appMetadata
+                ?.get("providers")
+                ?.toString()
+                ?.lowercase()
+                .orEmpty()
+            val isAnonymousUser = provider == "anonymous" || "anonymous" in providers
             val profile = SupabaseService.getOrCreateMyProfile()
             val spaces = loadSpaces()
             val selected = selectSpace(spaces, selectedSpaceId)
@@ -141,6 +153,7 @@ object AppSessionStore {
             _state.value = AppSessionState(
                 status = AppSessionStatus.Ready,
                 currentUserId = currentUserId,
+                isAnonymousUser = isAnonymousUser,
                 profile = profile,
                 memberProfiles = memberProfiles,
                 spaces = spaces,

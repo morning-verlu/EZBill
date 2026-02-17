@@ -35,6 +35,7 @@ class HomeScreenModel : ScreenModel {
             AppSessionStore.state.collect { appState ->
                 state = state.copy(
                     currentUserId = appState.currentUserId,
+                    isAnonymousUser = appState.isAnonymousUser,
                     profile = appState.profile ?: Profile(),
                     spaceList = appState.spaces,
                     space = appState.selectedSpace ?: Space(id = "", code = ""),
@@ -188,6 +189,7 @@ class HomeScreenModel : ScreenModel {
 
 data class HomeState(
     val currentUserId: String? = null,
+    val isAnonymousUser: Boolean = false,
     var profile: Profile = Profile(),
     val menuExpanded: Boolean = false,
     val spaceListExpanded: Boolean = false,

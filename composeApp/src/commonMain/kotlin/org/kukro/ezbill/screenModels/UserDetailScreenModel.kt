@@ -30,6 +30,7 @@ class UserDetailScreenModel : ScreenModel {
             AppSessionStore.state.collect { appState ->
                 state = state.copy(
                     currentUserId = appState.currentUserId,
+                    isAnonymousUser = appState.isAnonymousUser,
                     profile = appState.profile ?: Profile(),
                     memberProfiles = appState.memberProfiles,
                     isDataLoading = appState.status is AppSessionStatus.Initializing
@@ -176,6 +177,7 @@ class UserDetailScreenModel : ScreenModel {
 
 data class UserDetailState(
     val currentUserId: String? = null,
+    val isAnonymousUser: Boolean = false,
     var profile: Profile = Profile(),
     val expandedFabButtons: Boolean = false,
     val memberProfiles: Map<String, Profile> = emptyMap(),
