@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import io.github.jan.supabase.auth.exception.AuthErrorCode
+import io.github.jan.supabase.auth.exception.AuthRestException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -30,6 +32,7 @@ class UserDetailScreenModel : ScreenModel {
             AppSessionStore.state.collect { appState ->
                 state = state.copy(
                     currentUserId = appState.currentUserId,
+                    currentUserEmail = appState.currentUserEmail,
                     isAnonymousUser = appState.isAnonymousUser,
                     profile = appState.profile ?: Profile(),
                     memberProfiles = appState.memberProfiles,
@@ -104,30 +107,53 @@ class UserDetailScreenModel : ScreenModel {
         )
     }
 
-    fun updateUser() {
-        if (!validateUpdateInput()) return
-        val uEmail = state.updateUserInput.email.trim()
-        val uPassword = state.updateUserInput.password
+    fun updateUser(email: String, password: String, confirmPassword: String) {
+        if (!validateUpdateInput(email, password, confirmPassword)) {
+            screenModelScope.launch {
+                emitSnackBar("请先修正输入错误")
+            }
+            return
+        }
+        val uEmail = email.trim()
+        val uPassword = password
+
+        onDismissUpdateUserDialog()
 
         screenModelScope.launch {
             onShowTopLoading(true)
             emitSnackBar("开始升级账户...")
             try {
                 SupabaseService.updateUser(uEmail, uPassword)
+                AppSessionStore.bootstrapAuthenticated()
                 emitSnackBar("升级成功，请检查邮箱完成验证")
-                onDismissUpdateUserDialog()
+            } catch (e: AuthRestException) {
+                val msg = when (e.errorCode) {
+                    AuthErrorCode.EmailExists,
+                    AuthErrorCode.UserAlreadyExists,
+                    AuthErrorCode.Conflict -> "该邮箱已绑定，请更换邮箱"
+                    else -> "升级失败: ${e.message ?: "unknown error"}"
+                }
+                emitSnackBar(msg)
             } catch (e: Exception) {
-                emitSnackBar("升级失败: ${e.message ?: "unknown error"}")
+                val raw = e.message.orEmpty().lowercase()
+                val msg = if ("email_exists" in raw) {
+                    "该邮箱已绑定，请更换邮箱"
+                } else {
+                    "升级失败: ${e.message ?: "unknown error"}"
+                }
+                emitSnackBar(msg)
             } finally {
                 onShowTopLoading(false)
             }
         }
     }
 
-    private fun validateUpdateInput(): Boolean {
-        val email = state.updateUserInput.email.trim()
-        val password = state.updateUserInput.password
-        val confirm = state.updateUserInput.confirmPassword
+    private fun validateUpdateInput(
+        rawEmail: String,
+        password: String,
+        confirm: String
+    ): Boolean {
+        val email = rawEmail.trim()
 
         var emailError: String? = null
         var passwordError: String? = null
@@ -177,6 +203,7 @@ class UserDetailScreenModel : ScreenModel {
 
 data class UserDetailState(
     val currentUserId: String? = null,
+    val currentUserEmail: String? = null,
     val isAnonymousUser: Boolean = false,
     var profile: Profile = Profile(),
     val expandedFabButtons: Boolean = false,

@@ -130,8 +130,19 @@ object AppSessionStore {
     suspend fun bootstrapAuthenticated(selectedSpaceId: String? = null) {
         _state.value = _state.value.copy(status = AppSessionStatus.Loading)
         try {
-            val authUser = supabase.auth.currentUserOrNull()
+            val authUser = runCatching {
+                supabase.auth.retrieveUserForCurrentSession(updateSession = true)
+            }.getOrElse { supabase.auth.currentUserOrNull() }
             val currentUserId = authUser?.id
+            val currentUserEmail = authUser?.email
+                ?.takeIf { it.isNotBlank() }
+                ?: authUser?.newEmail
+                    ?.takeIf { it.isNotBlank() }
+                ?: authUser?.userMetadata
+                    ?.get("email")
+                    ?.toString()
+                    ?.trim('"')
+                    ?.takeIf { it.isNotBlank() }
             val provider = authUser?.appMetadata
                 ?.get("provider")
                 ?.toString()
@@ -143,6 +154,7 @@ object AppSessionStore {
                 ?.lowercase()
                 .orEmpty()
             val isAnonymousUser = provider == "anonymous" || "anonymous" in providers
+            println("auth email=${authUser?.email}, newEmail=${authUser?.newEmail}, currentUserEmail=$currentUserEmail, provider=$provider")
             val profile = SupabaseService.getOrCreateMyProfile()
             val spaces = loadSpaces()
             val selected = selectSpace(spaces, selectedSpaceId)
@@ -153,6 +165,7 @@ object AppSessionStore {
             _state.value = AppSessionState(
                 status = AppSessionStatus.Ready,
                 currentUserId = currentUserId,
+                currentUserEmail = currentUserEmail,
                 isAnonymousUser = isAnonymousUser,
                 profile = profile,
                 memberProfiles = memberProfiles,

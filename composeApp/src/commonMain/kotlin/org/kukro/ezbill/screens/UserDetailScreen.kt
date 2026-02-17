@@ -95,11 +95,14 @@ class UserDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "user.email ?: empty",
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    val email = userDetailScreenModel.state.currentUserEmail
+                    if (!email.isNullOrBlank()) {
+                        Text(
+                            email,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     IconButton(
                         onClick = { navigator.pop() },
@@ -151,7 +154,11 @@ class UserDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (userDetailScreenModel.state.isAnonymousUser) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val email = userDetailScreenModel.state.currentUserEmail
+                val shouldShowUpgrade = email.isNullOrBlank()
+                if (shouldShowUpgrade) {
                     Button(
                         onClick = {
                             userDetailScreenModel.onShowUpdateUserDialog(true)
@@ -276,7 +283,12 @@ private fun UpdateUserDialog(userDetailScreenModel: UserDetailScreenModel) {
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(onClick = {
-                        userDetailScreenModel.updateUser()
+                        val input = userDetailScreenModel.state.updateUserInput
+                        userDetailScreenModel.updateUser(
+                            email = input.email,
+                            password = input.password,
+                            confirmPassword = input.confirmPassword
+                        )
                     }) {
                         Text("Confirm")
                     }
