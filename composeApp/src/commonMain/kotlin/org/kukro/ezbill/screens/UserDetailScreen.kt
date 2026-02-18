@@ -51,11 +51,10 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
+import org.kukro.ezbill.rememberImagePicker
 import org.kukro.ezbill.screenModels.UserDetailScreenModel
 
-class UserDetailScreen(
-    private val userId: String
-) : Screen {
+class UserDetailScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
@@ -63,6 +62,8 @@ class UserDetailScreen(
         val userDetailScreenModel = rememberScreenModel { UserDetailScreenModel() }
         val hostState = LocalSnackBarHostState.current
         val scope = rememberCoroutineScope()
+        val picker = rememberImagePicker()
+
 
         LaunchedEffect(Unit) {
             userDetailScreenModel.snackBar.collect { msg ->
@@ -132,19 +133,19 @@ class UserDetailScreen(
                         modifier = Modifier.size(48.dp + 24.dp).clip(CircleShape)
                             .clickable(onClick = {
 
-//                                        scope.launch {
-//                                            val bytes = picker.pickImageBytes()
-//                                            println("picked bytes = ${bytes?.size}")
-//                                            bytes?.size?.let {
-//                                                if (it > 5 * 1024 * 1024) {
-//                                                    hostState.showSnackbar("不能大于5MB")
-//                                                    return@launch
-//                                                }
-//                                            }
-//                                            bytes?.let {
-//                                                homeScreenModel.updateAvatarOnly(it)
-//                                            }
-//                                        }
+                                scope.launch {
+                                    val bytes = picker.pickImageBytes()
+                                    println("picked bytes = ${bytes?.size}")
+                                    bytes?.size?.let {
+                                        if (it > 5 * 1024 * 1024) {
+                                            hostState.showSnackbar("不能大于5MB")
+                                            return@launch
+                                        }
+                                    }
+                                    bytes?.let {
+                                        userDetailScreenModel.updateAvatarOnly(it)
+                                    }
+                                }
                             })
                     )
                 }

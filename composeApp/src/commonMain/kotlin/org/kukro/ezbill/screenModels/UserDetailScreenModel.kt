@@ -199,6 +199,21 @@ class UserDetailScreenModel : ScreenModel {
         return emailError == null && passwordError == null && confirmError == null
     }
 
+    suspend fun updateAvatarOnly(imageBytes: ByteArray): Profile {
+        state = state.copy(isAvatarUploading = true)
+        emitSnackBar("开始上传头像...")
+        return try {
+            AppSessionStore.updateAvatarOnly(imageBytes)
+            emitSnackBar("头像更新成功")
+            state.profile
+        } catch (e: Exception) {
+            emitSnackBar("头像更新失败: ${e.message ?: "unknown error"}")
+            state.profile
+        } finally {
+            state = state.copy(isAvatarUploading = false)
+        }
+    }
+
 }
 
 data class UserDetailState(

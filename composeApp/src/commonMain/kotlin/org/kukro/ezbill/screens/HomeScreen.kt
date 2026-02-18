@@ -76,7 +76,6 @@ import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
-import org.kukro.ezbill.rememberImagePicker
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
 
@@ -91,7 +90,6 @@ class HomeScreen : Screen {
         val appState by AppSessionStore.state.collectAsState()
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
-        val picker = rememberImagePicker()
 
 
         LaunchedEffect(Unit) {
@@ -231,28 +229,11 @@ class HomeScreen : Screen {
                                     .clickable(onClick = {
                                         homeScreenModel.state.currentUserId?.let {
                                             navigator?.push(
-                                                UserDetailScreen(
-                                                    userId = it
-                                                )
+                                                UserDetailScreen()
                                             )
                                         }
-
-//                                        scope.launch {
-//                                            val bytes = picker.pickImageBytes()
-//                                            println("picked bytes = ${bytes?.size}")
-//                                            bytes?.size?.let {
-//                                                if (it > 5 * 1024 * 1024) {
-//                                                    hostState.showSnackbar("不能大于5MB")
-//                                                    return@launch
-//                                                }
-//                                            }
-//                                            bytes?.let {
-//                                                homeScreenModel.updateAvatarOnly(it)
-//                                            }
-//                                        }
                                     })
                             )
-
                         }
                     }
                 )
