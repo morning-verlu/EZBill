@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.AppLaunchChecker
 import kotlinx.coroutines.CompletableDeferred
 
 actual class ImagePicker(

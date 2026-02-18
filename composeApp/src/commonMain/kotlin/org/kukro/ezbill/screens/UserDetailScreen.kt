@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +48,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
+import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.screenModels.UserDetailScreenModel
 
@@ -59,6 +62,7 @@ class UserDetailScreen(
         val navigator = LocalNavigator.currentOrThrow
         val userDetailScreenModel = rememberScreenModel { UserDetailScreenModel() }
         val hostState = LocalSnackBarHostState.current
+        val scope = rememberCoroutineScope()
 
         LaunchedEffect(Unit) {
             userDetailScreenModel.snackBar.collect { msg ->
@@ -168,6 +172,22 @@ class UserDetailScreen(
                         Icon(imageVector = Icons.Filled.Upgrade, "upgrade")
                         Text("升级为正式账户")
                     }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        scope.launch {
+                            runCatching { AppSessionStore.signOut() }
+                                .onFailure {
+                                    hostState.showSnackbar("退出失败: ${it.message ?: "unknown error"}")
+                                }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Text("退出登录")
                 }
 
                 if (userDetailScreenModel.state.showUpdateUserDialog) {

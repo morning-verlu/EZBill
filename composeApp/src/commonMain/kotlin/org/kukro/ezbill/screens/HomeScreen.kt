@@ -48,6 +48,8 @@ import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -69,7 +71,9 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.AppConfig
+import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
+import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.rememberImagePicker
@@ -84,6 +88,7 @@ class HomeScreen : Screen {
         val scope = rememberCoroutineScope()
         val focusRequester = remember { FocusRequester() }
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
+        val appState by AppSessionStore.state.collectAsState()
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
         val picker = rememberImagePicker()
@@ -324,8 +329,23 @@ class HomeScreen : Screen {
             ) {
                 val showTopLoading =
                     homeScreenModel.state.isAvatarUploading
-                            || homeScreenModel.state.isDataLoading
+                            || (appState.status is AppSessionStatus.Initializing)
+                            || (appState.status is AppSessionStatus.Loading && appState.profile == null)
                             || homeScreenModel.uiState is HomeUiState.Loading
+
+                LaunchedEffect(
+                    homeScreenModel.state.isAvatarUploading,
+                    homeScreenModel.state.isDataLoading,
+                    homeScreenModel.uiState
+                ) {
+                    println(
+                        "HomeScreen.loadingFlags " +
+                                "isAvatarUploading=${homeScreenModel.state.isAvatarUploading}, " +
+                                "isDataLoading=${homeScreenModel.state.isDataLoading}, " +
+                                "uiState=${homeScreenModel.uiState::class.simpleName}, " +
+                                "showTopLoading=$showTopLoading"
+                    )
+                }
 
                 AnimatedVisibility(showTopLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

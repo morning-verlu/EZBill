@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -32,7 +33,13 @@ class HomeScreenModel : ScreenModel {
 
     private fun observeSessionState() {
         screenModelScope.launch {
-            AppSessionStore.state.collect { appState ->
+            try {
+                AppSessionStore.state.collect { appState ->
+                val isSessionBootstrapping = when (appState.status) {
+                    is AppSessionStatus.Initializing -> true
+                    is AppSessionStatus.Loading -> appState.currentUserId != null && appState.profile == null
+                    else -> false
+                }
                 state = state.copy(
                     currentUserId = appState.currentUserId,
                     isAnonymousUser = appState.isAnonymousUser,
@@ -42,9 +49,24 @@ class HomeScreenModel : ScreenModel {
                     memberProfiles = appState.memberProfiles,
                     spaceMembers = appState.members,
                     expenses = appState.expenses,
-                    isDataLoading = appState.status is AppSessionStatus.Initializing
-                            || appState.status is AppSessionStatus.Loading
+                    isDataLoading = isSessionBootstrapping
                 )
+                println(
+                    "HomeScreenModel.observeSessionState " +
+                            "status=${statusName(appState.status)}, " +
+                            "currentUserId=${appState.currentUserId}, " +
+                            "profileNull=${appState.profile == null}, " +
+                            "spaces=${appState.spaces.size}, " +
+                            "expenses=${appState.expenses.size}, " +
+                            "isDataLoading=${state.isDataLoading}, " +
+                            "uiState=${uiState::class.simpleName}, " +
+                            "isAvatarUploading=${state.isAvatarUploading}"
+                )
+            }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("HomeScreenModel.observeSessionState failed message=${e.message}")
             }
         }
     }
@@ -112,6 +134,7 @@ class HomeScreenModel : ScreenModel {
 
     private fun setLoading() {
         uiState = HomeUiState.Loading
+        println("HomeScreenModel.setLoading uiState=Loading")
     }
 
     private suspend fun setError(msg: String) {
@@ -120,6 +143,7 @@ class HomeScreenModel : ScreenModel {
 
     private fun setIdle() {
         uiState = HomeUiState.Idle
+        println("HomeScreenModel.setIdle uiState=Idle")
     }
 
     suspend fun submitNewSpace(
@@ -185,6 +209,14 @@ class HomeScreenModel : ScreenModel {
         AppSessionStore.updateProfileWithNewAvatar(username, imageBytes)
         return state.profile
     }
+}
+
+private fun statusName(status: AppSessionStatus): String = when (status) {
+    is AppSessionStatus.Initializing -> "Initializing"
+    is AppSessionStatus.Loading -> "Loading"
+    is AppSessionStatus.Ready -> "Ready"
+    is AppSessionStatus.Unauthenticated -> "Unauthenticated"
+    is AppSessionStatus.Error -> "Error(${status.message})"
 }
 
 data class HomeState(

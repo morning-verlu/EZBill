@@ -1,6 +1,7 @@
 package org.kukro.ezbill
 
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.signInAnonymously
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
@@ -13,6 +14,7 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import com.russhwolf.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,9 +23,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.models.AppSessionState
 import org.kukro.ezbill.models.AppSessionStatus
+import org.kukro.ezbill.models.AuthPreference
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
@@ -34,13 +39,20 @@ object AppSessionStore {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var started = false
     private var sessionJob: Job? = null
+    private val bootstrapMutex = Mutex()
+    private var isBootstrapping = false
 
     private var expensesChannel: RealtimeChannel? = null
     private var membersChannel: RealtimeChannel? = null
     private var expensesCollectJob: Job? = null
     private var membersCollectJob: Job? = null
 
-    private val _state = MutableStateFlow(AppSessionState())
+    private val _state = MutableStateFlow(
+        AppSessionState(
+            hasChosenAuthMethod = settings.getBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false),
+            preferredAuthMethod = readAuthPreference()
+        )
+    )
     val state: StateFlow<AppSessionState> = _state.asStateFlow()
 
     fun start() {
@@ -55,11 +67,19 @@ object AppSessionStore {
 
                     is SessionStatus.NotAuthenticated -> {
                         clearData(AppSessionStatus.Unauthenticated)
-                        signInAnonymous()
                     }
 
                     is SessionStatus.Authenticated -> {
-                        bootstrapAuthenticated()
+                        if (isBootstrapping) return@collect
+                        val authUserId = supabase.auth.currentUserOrNull()?.id
+                        val current = _state.value
+                        val alreadyReadyForSameUser =
+                            current.status is AppSessionStatus.Ready &&
+                                    current.currentUserId != null &&
+                                    current.currentUserId == authUserId
+                        if (!alreadyReadyForSameUser) {
+                            bootstrapAuthenticated()
+                        }
                     }
 
                     is SessionStatus.RefreshFailure -> {
@@ -96,7 +116,14 @@ object AppSessionStore {
 
     suspend fun createSpace(name: String, displayName: String) {
         val space = SupabaseService.createSpace(name, displayName)
-        bootstrapAuthenticated(selectedSpaceId = space.id)
+        val current = _state.value
+        val mergedSpaces = (current.spaces + space).distinctBy { it.id }
+        _state.value = current.copy(
+            status = AppSessionStatus.Loading,
+            spaces = mergedSpaces,
+            selectedSpace = space
+        )
+        bootstrapAuthenticated(selectedSpaceId = space.id, fallbackSelectedSpace = space)
     }
 
     suspend fun joinSpace(code: String, displayName: String) {
@@ -107,7 +134,14 @@ object AppSessionStore {
                 "p_display_name" to displayName
             )
         ).decodeAs<Space>()
-        bootstrapAuthenticated(selectedSpaceId = space.id)
+        val current = _state.value
+        val mergedSpaces = (current.spaces + space).distinctBy { it.id }
+        _state.value = current.copy(
+            status = AppSessionStatus.Loading,
+            spaces = mergedSpaces,
+            selectedSpace = space
+        )
+        bootstrapAuthenticated(selectedSpaceId = space.id, fallbackSelectedSpace = space)
     }
 
     suspend fun updateAvatarOnly(imageBytes: ByteArray) {
@@ -127,58 +161,134 @@ object AppSessionStore {
         mergeProfile(profile)
     }
 
-    suspend fun bootstrapAuthenticated(selectedSpaceId: String? = null) {
-        _state.value = _state.value.copy(status = AppSessionStatus.Loading)
-        try {
-            val authUser = runCatching {
-                supabase.auth.retrieveUserForCurrentSession(updateSession = true)
-            }.getOrElse { supabase.auth.currentUserOrNull() }
-            val currentUserId = authUser?.id
-            val currentUserEmail = authUser?.email
-                ?.takeIf { it.isNotBlank() }
-                ?: authUser?.newEmail
+    suspend fun chooseAnonymous() {
+        saveAuthPreference(AuthPreference.ANONYMOUS)
+        signInAnonymous()
+    }
+
+    suspend fun signInWithEmail(email: String, password: String) {
+        saveAuthPreference(AuthPreference.EMAIL)
+        supabase.auth.signInWith(Email) {
+            this.email = email
+            this.password = password
+        }
+    }
+
+    suspend fun signUpWithEmail(email: String, password: String) {
+        saveAuthPreference(AuthPreference.EMAIL)
+        supabase.auth.signUpWith(Email) {
+            this.email = email
+            this.password = password
+        }
+    }
+
+    suspend fun signOut() {
+        supabase.auth.signOut()
+    }
+
+    suspend fun bootstrapAuthenticated(
+        selectedSpaceId: String? = null,
+        fallbackSelectedSpace: Space? = null
+    ) {
+        bootstrapMutex.withLock {
+            isBootstrapping = true
+            _state.value = _state.value.copy(status = AppSessionStatus.Loading)
+            try {
+                println("AppSessionStore.bootstrap start selectedSpaceId=$selectedSpaceId")
+                val authUser = runCatching {
+                    supabase.auth.retrieveUserForCurrentSession(updateSession = false)
+                }.getOrElse { supabase.auth.currentUserOrNull() }
+                val currentUserId = authUser?.id
+                val currentUserEmail = authUser?.email
                     ?.takeIf { it.isNotBlank() }
-                ?: authUser?.userMetadata
-                    ?.get("email")
+                    ?: authUser?.newEmail
+                        ?.takeIf { it.isNotBlank() }
+                    ?: authUser?.userMetadata
+                        ?.get("email")
+                        ?.toString()
+                        ?.trim('"')
+                        ?.takeIf { it.isNotBlank() }
+                val provider = authUser?.appMetadata
+                    ?.get("provider")
                     ?.toString()
                     ?.trim('"')
-                    ?.takeIf { it.isNotBlank() }
-            val provider = authUser?.appMetadata
-                ?.get("provider")
-                ?.toString()
-                ?.trim('"')
-                ?.lowercase()
-            val providers = authUser?.appMetadata
-                ?.get("providers")
-                ?.toString()
-                ?.lowercase()
-                .orEmpty()
-            val isAnonymousUser = provider == "anonymous" || "anonymous" in providers
-            println("auth email=${authUser?.email}, newEmail=${authUser?.newEmail}, currentUserEmail=$currentUserEmail, provider=$provider")
-            val profile = SupabaseService.getOrCreateMyProfile()
-            val spaces = loadSpaces()
-            val selected = selectSpace(spaces, selectedSpaceId)
-            val members = selected?.id?.let { loadMembers(it) }.orEmpty()
-            val expenses = selected?.id?.let { loadExpenses(it) }.orEmpty()
-            val memberProfiles = loadProfilesForMembers(members, profile)
+                    ?.lowercase()
+                val providers = authUser?.appMetadata
+                    ?.get("providers")
+                    ?.toString()
+                    ?.lowercase()
+                    .orEmpty()
+                val isAnonymousUser = provider == "anonymous" || "anonymous" in providers
 
-            _state.value = AppSessionState(
-                status = AppSessionStatus.Ready,
-                currentUserId = currentUserId,
-                currentUserEmail = currentUserEmail,
-                isAnonymousUser = isAnonymousUser,
-                profile = profile,
-                memberProfiles = memberProfiles,
-                spaces = spaces,
-                selectedSpace = selected,
-                members = members,
-                expenses = expenses
-            )
-            subscribeForSpace(selected?.id)
-        } catch (e: Exception) {
-            _state.value = _state.value.copy(
-                status = AppSessionStatus.Error(e.message ?: "Bootstrap failed")
-            )
+                // As soon as auth info is known, expose it so UI can enter HomeScreen early.
+                _state.value = _state.value.copy(
+                    status = AppSessionStatus.Loading,
+                    currentUserId = currentUserId,
+                    currentUserEmail = currentUserEmail,
+                    isAnonymousUser = isAnonymousUser,
+                    hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
+                    preferredAuthMethod = _state.value.preferredAuthMethod
+                )
+
+                println("auth email=${authUser?.email}, newEmail=${authUser?.newEmail}, currentUserEmail=$currentUserEmail, provider=$provider")
+                println("AppSessionStore.bootstrap step=profile start")
+                val profile = SupabaseService.getOrCreateMyProfile()
+                println("AppSessionStore.bootstrap step=profile done userId=${profile.userId}")
+
+                println("AppSessionStore.bootstrap step=spaces start")
+                val spaces = loadSpaces()
+                val spacesWithFallback = if (
+                    fallbackSelectedSpace != null && spaces.none { it.id == fallbackSelectedSpace.id }
+                ) {
+                    listOf(fallbackSelectedSpace) + spaces
+                } else {
+                    spaces
+                }
+                println("AppSessionStore.bootstrap step=spaces done count=${spacesWithFallback.size}")
+                val selected = selectSpace(spacesWithFallback, selectedSpaceId, fallbackSelectedSpace)
+                println("AppSessionStore.bootstrap step=select done selectedId=${selected?.id}")
+
+                val members = selected?.id?.let { sid ->
+                    println("AppSessionStore.bootstrap step=members start spaceId=$sid")
+                    loadMembers(sid)
+                }.orEmpty()
+                println("AppSessionStore.bootstrap step=members done count=${members.size}")
+
+                val expenses = selected?.id?.let { sid ->
+                    println("AppSessionStore.bootstrap step=expenses start spaceId=$sid")
+                    loadExpenses(sid)
+                }.orEmpty()
+                println("AppSessionStore.bootstrap step=expenses done count=${expenses.size}")
+
+                println("AppSessionStore.bootstrap step=memberProfiles start")
+                val memberProfiles = loadProfilesForMembers(members, profile)
+                println("AppSessionStore.bootstrap step=memberProfiles done count=${memberProfiles.size}")
+
+                _state.value = AppSessionState(
+                    status = AppSessionStatus.Ready,
+                    currentUserId = currentUserId,
+                    currentUserEmail = currentUserEmail,
+                    isAnonymousUser = isAnonymousUser,
+                    hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
+                    preferredAuthMethod = _state.value.preferredAuthMethod,
+                    profile = profile,
+                    memberProfiles = memberProfiles,
+                    spaces = spacesWithFallback,
+                    selectedSpace = selected,
+                    members = members,
+                    expenses = expenses
+                )
+                println("AppSessionStore.bootstrap done status=Ready")
+                subscribeForSpace(selected?.id)
+            } catch (e: Exception) {
+                println("AppSessionStore.bootstrap failed message=${e.message}")
+                _state.value = _state.value.copy(
+                    status = AppSessionStatus.Error(e.message ?: "Bootstrap failed")
+                )
+            } finally {
+                isBootstrapping = false
+                println("AppSessionStore.bootstrap end")
+            }
         }
     }
 
@@ -193,7 +303,11 @@ object AppSessionStore {
     }
 
     private fun clearData(status: AppSessionStatus) {
-        _state.value = AppSessionState(status = status)
+        _state.value = AppSessionState(
+            status = status,
+            hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
+            preferredAuthMethod = _state.value.preferredAuthMethod
+        )
         clearSubscriptions()
     }
 
@@ -219,11 +333,17 @@ object AppSessionStore {
         return result.decodeList()
     }
 
-    private fun selectSpace(spaces: List<Space>, selectedSpaceId: String?): Space? {
-        if (spaces.isEmpty()) return null
+    private fun selectSpace(
+        spaces: List<Space>,
+        selectedSpaceId: String?,
+        fallbackSelectedSpace: Space? = null
+    ): Space? {
+        if (spaces.isEmpty()) return fallbackSelectedSpace
         val preferred = selectedSpaceId
             ?: _state.value.selectedSpace?.id
-        return spaces.firstOrNull { it.id == preferred } ?: spaces.first()
+        return spaces.firstOrNull { it.id == preferred }
+            ?: fallbackSelectedSpace
+            ?: spaces.first()
     }
 
     private fun subscribeForSpace(spaceId: String?) {
@@ -323,6 +443,20 @@ object AppSessionStore {
         val updatedCurrentProfile = if (current.currentUserId == uid) profile else current.profile
         _state.value = current.copy(profile = updatedCurrentProfile, memberProfiles = updatedMap)
     }
+
+    private fun saveAuthPreference(preference: AuthPreference) {
+        settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, true)
+        settings.putString(KEY_AUTH_PREFERENCE, preference.name)
+        _state.value = _state.value.copy(
+            hasChosenAuthMethod = true,
+            preferredAuthMethod = preference
+        )
+    }
+
+    private fun readAuthPreference(): AuthPreference? {
+        val raw = settings.getStringOrNull(KEY_AUTH_PREFERENCE) ?: return null
+        return AuthPreference.entries.firstOrNull { it.name == raw }
+    }
 }
 
 private fun generateUsername(): String {
@@ -338,3 +472,7 @@ private fun generateUsername(): String {
     )
     return adjectives[Random.nextInt(adjectives.size)] + nouns[Random.nextInt(nouns.size)]
 }
+    private const val KEY_HAS_CHOSEN_AUTH_METHOD = "has_chosen_auth_method"
+    private const val KEY_AUTH_PREFERENCE = "auth_preference"
+
+    private val settings = Settings()
