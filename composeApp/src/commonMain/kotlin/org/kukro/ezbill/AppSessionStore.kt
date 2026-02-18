@@ -183,6 +183,14 @@ object AppSessionStore {
     }
 
     suspend fun signOut() {
+        settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false)
+        settings.remove(KEY_AUTH_PREFERENCE)
+        clearSubscriptions()
+        _state.value = AppSessionState(
+            status = AppSessionStatus.Unauthenticated,
+            hasChosenAuthMethod = false,
+            preferredAuthMethod = null
+        )
         supabase.auth.signOut()
     }
 

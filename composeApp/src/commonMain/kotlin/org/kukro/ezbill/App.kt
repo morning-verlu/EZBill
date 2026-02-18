@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import org.kukro.ezbill.models.AppSessionStatus
@@ -18,6 +19,12 @@ import org.kukro.ezbill.screens.EmailAuthScreen
 import org.kukro.ezbill.screens.HomeScreen
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.ui.theme.EzBillTheme
+
+private enum class RootRoute {
+    HOME,
+    AUTH_CHOICE,
+    EMAIL_AUTH
+}
 
 @Composable
 fun App() {
@@ -33,6 +40,7 @@ fun App() {
 
         LaunchedEffect(appState.status, appState.preferredAuthMethod) {
             if (appState.status is AppSessionStatus.Unauthenticated &&
+                appState.hasChosenAuthMethod &&
                 appState.preferredAuthMethod == AuthPreference.ANONYMOUS
             ) {
                 runCatching { AppSessionStore.chooseAnonymous() }
@@ -43,27 +51,34 @@ fun App() {
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState) }
             ) {
-                val rootScreen = when {
+                val rootRoute = when {
                     appState.currentUserId != null -> {
-                        homeScreen
+                        RootRoute.HOME
                     }
 
                     appState.status is AppSessionStatus.Initializing ||
                             appState.status is AppSessionStatus.Loading -> {
-                        homeScreen
+                        RootRoute.HOME
                     }
 
                     appState.status is AppSessionStatus.Unauthenticated &&
                             appState.preferredAuthMethod == AuthPreference.EMAIL -> {
-                        emailAuthScreen
+                        RootRoute.EMAIL_AUTH
                     }
 
                     else -> {
-                        authChoiceScreen
+                        RootRoute.AUTH_CHOICE
                     }
                 }
-                Navigator(rootScreen) {
-                    SlideTransition(it)
+                val rootScreen = when (rootRoute) {
+                    RootRoute.HOME -> homeScreen
+                    RootRoute.AUTH_CHOICE -> authChoiceScreen
+                    RootRoute.EMAIL_AUTH -> emailAuthScreen
+                }
+                key(rootRoute) {
+                    Navigator(rootScreen) {
+                        SlideTransition(it)
+                    }
                 }
             }
         }
