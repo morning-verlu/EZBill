@@ -93,7 +93,9 @@ class UserDetailScreen : Screen {
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                AnimatedVisibility(userDetailScreenModel.state.showTopLoading) {
+                val showTopLoading = userDetailScreenModel.state.showTopLoading ||
+                        userDetailScreenModel.state.isAvatarUploading
+                AnimatedVisibility(showTopLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 Box(
