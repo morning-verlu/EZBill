@@ -2,6 +2,7 @@ package org.kukro.ezbill
 
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.SignOutScope
 import io.github.jan.supabase.auth.signInAnonymously
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
@@ -197,6 +198,7 @@ object AppSessionStore {
             this.email = email
             this.password = password
         }
+        enforceSingleSession()
         saveAuthPreference(AuthPreference.EMAIL)
     }
 
@@ -205,6 +207,7 @@ object AppSessionStore {
             this.email = email
             this.password = password
         }
+        enforceSingleSession()
         saveAuthPreference(AuthPreference.EMAIL)
     }
 
@@ -519,6 +522,14 @@ object AppSessionStore {
         }
         val updatedCurrentProfile = if (current.currentUserId == uid) profile else current.profile
         _state.value = current.copy(profile = updatedCurrentProfile, memberProfiles = updatedMap)
+    }
+
+    private suspend fun enforceSingleSession() {
+        runCatching {
+            supabase.auth.signOut(scope = SignOutScope.OTHERS)
+        }.onFailure {
+            println("AppSessionStore.enforceSingleSession failed message=${it.message}")
+        }
     }
 
     private fun saveAuthPreference(preference: AuthPreference) {
