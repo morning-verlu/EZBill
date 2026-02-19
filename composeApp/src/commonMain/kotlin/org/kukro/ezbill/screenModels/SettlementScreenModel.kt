@@ -24,6 +24,9 @@ class SettlementScreenModel(
     var note by mutableStateOf("")
         private set
 
+    var isSaving by mutableStateOf(false)
+        private set
+
     fun onNoteChange(value: String) {
         note = value
     }
@@ -43,10 +46,14 @@ class SettlementScreenModel(
     }
 
     fun save(onDone: () -> Unit) {
+        if (isSaving) return
+        isSaving = true
+
         screenModelScope.launch {
             val success = uiState as? SettlementUiState.Success
             if (success == null) {
                 uiState = SettlementUiState.Error("没有可保存的结算结果")
+                isSaving = false
                 return@launch
             }
 
@@ -68,6 +75,8 @@ class SettlementScreenModel(
                 onDone()
             } catch (e: Throwable) {
                 uiState = SettlementUiState.Error(e.message ?: "保存结算失败")
+            } finally {
+                isSaving = false
             }
         }
     }

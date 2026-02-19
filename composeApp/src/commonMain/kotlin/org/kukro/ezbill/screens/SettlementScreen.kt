@@ -162,9 +162,14 @@ class SettlementScreen(
 
                         Button(
                             onClick = { screenModel.save { navigator.pop() } },
+                            enabled = !screenModel.isSaving,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("保存本次结算")
+                            if (screenModel.isSaving) {
+                                Text("保存中...")
+                            } else {
+                                Text("保存本次结算")
+                            }
                         }
                     }
                 }
