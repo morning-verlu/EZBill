@@ -109,10 +109,11 @@ class EmailAuthScreen : Screen {
                     .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(
-                    text = "欢迎回来",
-                    style = MaterialTheme.typography.headlineMedium
-                )
+                if (state.loading) {
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
                 Text(
                     text = "使用邮箱和密码登录后即可同步账本数据",
                     style = MaterialTheme.typography.bodyMedium,
@@ -120,6 +121,7 @@ class EmailAuthScreen : Screen {
                 )
 
                 Spacer(Modifier.height(2.dp))
+
                 AuthInputCard(
                     value = state.email,
                     onValueChange = emailAuthScreenModel::onEmailChange,
@@ -175,14 +177,7 @@ class EmailAuthScreen : Screen {
                     Text("注册")
                 }
 
-                if (state.loading) {
-                    Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(6.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
+
             }
         }
     }
