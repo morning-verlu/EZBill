@@ -15,6 +15,7 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import com.russhwolf.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,7 @@ object AppSessionStore {
     private var membersCollectJob: Job? = null
     private var foregroundRecoverJob: Job? = null
     private var lastForegroundRecoverAtMs: Long = 0L
+    private val settings = Settings()
 
     private val _state = MutableStateFlow(AppSessionState())
     val state: StateFlow<AppSessionState> = _state.asStateFlow()
@@ -132,6 +134,7 @@ object AppSessionStore {
                 members = members,
                 expenses = expenses
             )
+            saveSelectedSpaceId(space.id)
             subscribeForSpace(space.id)
         } catch (e: Exception) {
             _state.value = _state.value.copy(
@@ -288,6 +291,7 @@ object AppSessionStore {
                 println("AppSessionStore.bootstrap step=spaces done count=${spacesWithFallback.size}")
                 val selected = selectSpace(spacesWithFallback, selectedSpaceId, fallbackSelectedSpace)
                 println("AppSessionStore.bootstrap step=select done selectedId=${selected?.id}")
+                saveSelectedSpaceId(selected?.id)
 
                 val members = selected?.id?.let { sid ->
                     println("AppSessionStore.bootstrap step=members start spaceId=$sid")
@@ -379,10 +383,21 @@ object AppSessionStore {
         if (spaces.isEmpty()) return fallbackSelectedSpace
         val preferred = selectedSpaceId
             ?: _state.value.selectedSpace?.id
+            ?: readSelectedSpaceId()
         return spaces.firstOrNull { it.id == preferred }
             ?: fallbackSelectedSpace
             ?: spaces.first()
     }
+
+    private fun saveSelectedSpaceId(spaceId: String?) {
+        if (spaceId.isNullOrBlank()) {
+            settings.remove(KEY_SELECTED_SPACE_ID)
+            return
+        }
+        settings.putString(KEY_SELECTED_SPACE_ID, spaceId)
+    }
+
+    private fun readSelectedSpaceId(): String? = settings.getStringOrNull(KEY_SELECTED_SPACE_ID)
 
     private fun subscribeForSpace(spaceId: String?) {
         clearSubscriptions()
@@ -534,6 +549,7 @@ object AppSessionStore {
     }
 
     private const val FOREGROUND_RECOVER_MIN_INTERVAL_MS = 1_500L
+    private const val KEY_SELECTED_SPACE_ID = "selected_space_id"
 }
 
 private fun generateUsername(): String {
