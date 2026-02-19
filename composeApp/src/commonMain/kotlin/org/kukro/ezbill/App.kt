@@ -1,5 +1,9 @@
 package org.kukro.ezbill
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -10,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import org.kukro.ezbill.models.AppSessionStatus
@@ -21,6 +27,7 @@ import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.ui.theme.EzBillTheme
 
 private enum class RootRoute {
+    LOADING,
     HOME,
     AUTH_CHOICE,
     EMAIL_AUTH
@@ -50,20 +57,24 @@ fun App() {
         CompositionLocalProvider(LocalSnackBarHostState provides hostState) {
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState) }
-            ) {
+            ) { innerPadding ->
                 val rootRoute = when {
+                    appState.status is AppSessionStatus.Unauthenticated &&
+                            appState.preferredAuthMethod == AuthPreference.EMAIL -> {
+                        RootRoute.EMAIL_AUTH
+                    }
+
+                    appState.status is AppSessionStatus.Unauthenticated -> {
+                        RootRoute.AUTH_CHOICE
+                    }
+
                     appState.currentUserId != null -> {
                         RootRoute.HOME
                     }
 
                     appState.status is AppSessionStatus.Initializing ||
                             appState.status is AppSessionStatus.Loading -> {
-                        RootRoute.HOME
-                    }
-
-                    appState.status is AppSessionStatus.Unauthenticated &&
-                            appState.preferredAuthMethod == AuthPreference.EMAIL -> {
-                        RootRoute.EMAIL_AUTH
+                        RootRoute.LOADING
                     }
 
                     else -> {
@@ -71,16 +82,35 @@ fun App() {
                     }
                 }
                 val rootScreen = when (rootRoute) {
+                    RootRoute.LOADING -> null
                     RootRoute.HOME -> homeScreen
                     RootRoute.AUTH_CHOICE -> authChoiceScreen
                     RootRoute.EMAIL_AUTH -> emailAuthScreen
                 }
                 key(rootRoute) {
-                    Navigator(rootScreen) {
-                        SlideTransition(it)
+                    if (rootScreen == null) {
+                        RootLoadingScreen(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        )
+                    } else {
+                        Navigator(rootScreen) {
+                            SlideTransition(it)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RootLoadingScreen(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator()
     }
 }

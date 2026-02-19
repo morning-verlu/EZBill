@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.models.AppSessionState
 import org.kukro.ezbill.models.AppSessionStatus
@@ -44,6 +46,7 @@ object AppSessionStore {
     private var sessionJob: Job? = null
     private val bootstrapMutex = Mutex()
     private var isBootstrapping = false
+    private var isSigningOut = false
 
     private var expensesChannel: RealtimeChannel? = null
     private var membersChannel: RealtimeChannel? = null
@@ -67,6 +70,7 @@ object AppSessionStore {
             supabase.auth.sessionStatus.collect { status ->
                 when (status) {
                     is SessionStatus.Initializing -> {
+                        if (isSigningOut) return@collect
                         _state.value = _state.value.copy(status = AppSessionStatus.Initializing)
                     }
 
@@ -75,6 +79,7 @@ object AppSessionStore {
                     }
 
                     is SessionStatus.Authenticated -> {
+                        if (isSigningOut) return@collect
                         if (isBootstrapping) return@collect
                         val authUserId = supabase.auth.currentUserOrNull()?.id
                         val current = _state.value
@@ -88,6 +93,7 @@ object AppSessionStore {
                     }
 
                     is SessionStatus.RefreshFailure -> {
+                        if (isSigningOut) return@collect
                         _state.value = _state.value.copy(
                             status = AppSessionStatus.Error("Session refresh failed")
                         )
@@ -211,23 +217,36 @@ object AppSessionStore {
         saveAuthPreference(AuthPreference.EMAIL)
     }
 
-    suspend fun signOut() {
-        settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false)
-        settings.remove(KEY_AUTH_PREFERENCE)
-        clearSubscriptions()
-        _state.value = AppSessionState(
-            status = AppSessionStatus.Unauthenticated,
-            hasChosenAuthMethod = false,
-            preferredAuthMethod = null
-        )
-        supabase.auth.signOut()
+    suspend fun signOut() = withContext(NonCancellable) {
+        isSigningOut = true
+        try {
+            bootstrapMutex.withLock {
+                settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false)
+                settings.remove(KEY_AUTH_PREFERENCE)
+                clearSubscriptions()
+                _state.value = AppSessionState(
+                    status = AppSessionStatus.Unauthenticated,
+                    hasChosenAuthMethod = false,
+                    preferredAuthMethod = null
+                )
+                runCatching {
+                    supabase.auth.signOut(scope = SignOutScope.LOCAL)
+                }.onFailure {
+                    println("AppSessionStore.signOut local failed message=${it.message}")
+                }
+            }
+        } finally {
+            isSigningOut = false
+        }
     }
 
     suspend fun bootstrapAuthenticated(
         selectedSpaceId: String? = null,
         fallbackSelectedSpace: Space? = null
     ) {
+        if (isSigningOut) return
         bootstrapMutex.withLock {
+            if (isSigningOut) return@withLock
             isBootstrapping = true
             _state.value = _state.value.copy(status = AppSessionStatus.Loading)
             try {
@@ -266,6 +285,7 @@ object AppSessionStore {
                     hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
                     preferredAuthMethod = _state.value.preferredAuthMethod
                 )
+                if (isSigningOut) return@withLock
 
                 println("auth email=${authUser?.email}, newEmail=${authUser?.newEmail}, currentUserEmail=$currentUserEmail, provider=$provider")
                 println("AppSessionStore.bootstrap step=profile start")
@@ -316,6 +336,7 @@ object AppSessionStore {
                     expenses = expenses
                 )
                 println("AppSessionStore.bootstrap done status=Ready")
+                if (isSigningOut) return@withLock
                 subscribeForSpace(selected?.id)
             } catch (e: Exception) {
                 println("AppSessionStore.bootstrap failed message=${e.message}")
