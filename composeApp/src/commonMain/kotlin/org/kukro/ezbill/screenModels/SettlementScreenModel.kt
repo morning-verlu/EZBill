@@ -5,15 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.SupabaseClient.supabase
+import org.kukro.ezbill.SupabaseService
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.ExpenseShareRow
-import org.kukro.ezbill.models.SettlementInsertRow
-import org.kukro.ezbill.models.SettlementItemInsertRow
-import org.kukro.ezbill.models.SettlementRow
+import org.kukro.ezbill.models.SettlementTransferInput
 import org.kukro.ezbill.models.SpaceMember
 import kotlin.math.round
 
@@ -36,8 +32,8 @@ class SettlementScreenModel(
         screenModelScope.launch {
             uiState = SettlementUiState.Loading
             try {
-                val expenses = fetchExpenses(spaceId)
-                val shares = fetchSharesByExpenseIds(expenses.map { it.id })
+                val expenses = SupabaseService.fetchExpensesBySpace(spaceId)
+                val shares = SupabaseService.fetchExpenseSharesByExpenseIds(expenses.map { it.id })
                 val preview = buildPreview(members, expenses, shares)
                 uiState = SettlementUiState.Success(preview)
             } catch (e: Throwable) {
@@ -55,34 +51,18 @@ class SettlementScreenModel(
             }
 
             try {
-                val currentUserId = supabase.auth.currentUserOrNull()?.id
-                    ?: throw IllegalStateException("当前用户未登录")
-
-                val settlementRow = supabase.postgrest["settlements"].insert(
-                    SettlementInsertRow(
-                        spaceId = spaceId,
-                        createdBy = currentUserId,
-                        note = note.ifBlank { null },
-                        status = "open",
-                        rangeStart = null,
-                        rangeEnd = null
-                    )
-                ) {
-                    select()
-                }.decodeList<SettlementRow>().first()
-
-                val transferRows = success.preview.transfers.map {
-                    SettlementItemInsertRow(
-                        settlementId = settlementRow.id,
+                val transferInputs = success.preview.transfers.map {
+                    SettlementTransferInput(
                         fromUserId = it.fromUserId,
                         toUserId = it.toUserId,
                         amount = it.amount
                     )
                 }
-
-                if (transferRows.isNotEmpty()) {
-                    supabase.postgrest["settlement_items"].insert(transferRows)
-                }
+                SupabaseService.saveSettlement(
+                    spaceId = spaceId,
+                    note = note.ifBlank { null },
+                    transfers = transferInputs
+                )
 
                 uiState = SettlementUiState.Success(success.preview, "结算保存成功")
                 onDone()
@@ -90,19 +70,6 @@ class SettlementScreenModel(
                 uiState = SettlementUiState.Error(e.message ?: "保存结算失败")
             }
         }
-    }
-
-    private suspend fun fetchExpenses(spaceId: String): List<Expense> {
-        return supabase.postgrest["expenses"].select {
-            filter { eq("space_id", spaceId) }
-        }.decodeList()
-    }
-
-    private suspend fun fetchSharesByExpenseIds(expenseIds: List<String>): List<ExpenseShareRow> {
-        if (expenseIds.isEmpty()) return emptyList()
-        return supabase.postgrest["expense_shares"].select {
-            filter { isIn("expense_id", expenseIds) }
-        }.decodeList()
     }
 
     private fun buildPreview(
@@ -225,4 +192,3 @@ data class TransferSuggestion(
     val toName: String?,
     val amount: Double
 )
-

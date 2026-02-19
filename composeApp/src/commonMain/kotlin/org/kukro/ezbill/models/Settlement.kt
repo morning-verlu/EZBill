@@ -33,3 +33,8 @@ data class SettlementItemInsertRow(
     val amount: Double
 )
 
+data class SettlementTransferInput(
+    val fromUserId: String,
+    val toUserId: String,
+    val amount: Double
+)

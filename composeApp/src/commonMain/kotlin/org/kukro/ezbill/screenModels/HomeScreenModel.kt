@@ -146,39 +146,47 @@ class HomeScreenModel : ScreenModel {
         println("HomeScreenModel.setIdle uiState=Idle")
     }
 
-    suspend fun submitNewSpace(
+    fun submitNewSpace(
         newSpaceName: String = state.newSpaceName,
         displayName: String = state.displayName
     ) {
-        setLoading()
-        try {
-            val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
-            AppSessionStore.createSpace(newSpaceName, finalDisplayName)
-            emitSnackBar("创建成功")
-        } catch (e: Exception) {
-            setError(e.message.toString())
-        } finally {
-            setIdle()
+        screenModelScope.launch {
+            setLoading()
+            try {
+                val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
+                AppSessionStore.createSpace(newSpaceName, finalDisplayName)
+                emitSnackBar("创建成功")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError(e.message.toString())
+            } finally {
+                setIdle()
+            }
         }
     }
 
-    suspend fun submitJoinSpace(
+    fun submitJoinSpace(
         code: String = state.joinSpaceCode,
         displayName: String = state.displayName
     ) {
-        setLoading()
-        try {
-            if (code.isBlank()) {
-                emitSnackBar("分享码不能为空")
-                return
+        screenModelScope.launch {
+            setLoading()
+            try {
+                if (code.isBlank()) {
+                    emitSnackBar("分享码不能为空")
+                    return@launch
+                }
+                val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
+                AppSessionStore.joinSpace(code, finalDisplayName)
+                emitSnackBar("加入成功")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError(e.message.toString())
+            } finally {
+                setIdle()
             }
-            val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
-            AppSessionStore.joinSpace(code, finalDisplayName)
-            emitSnackBar("加入成功")
-        } catch (e: Exception) {
-            setError(e.message.toString())
-        } finally {
-            setIdle()
         }
     }
 

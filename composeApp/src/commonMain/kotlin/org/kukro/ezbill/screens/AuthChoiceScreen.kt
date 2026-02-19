@@ -12,29 +12,31 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
+import org.kukro.ezbill.screenModels.AuthChoiceScreenModel
 
 class AuthChoiceScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val scope = rememberCoroutineScope()
+        val authChoiceScreenModel = rememberScreenModel { AuthChoiceScreenModel() }
         val hostState = LocalSnackBarHostState.current
-        var loading by remember { mutableStateOf(false) }
+        val loading = authChoiceScreenModel.loading
+
+        LaunchedEffect(Unit) {
+            authChoiceScreenModel.snackBar.collect { msg ->
+                hostState.showSnackbar(msg)
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -56,18 +58,7 @@ class AuthChoiceScreen : Screen {
             Spacer(Modifier.height(24.dp))
 
             Button(
-                onClick = {
-                    loading = true
-                    scope.launch {
-                        try {
-                            AppSessionStore.chooseAnonymous()
-                        } catch (e: Exception) {
-                            hostState.showSnackbar("匿名登录失败: ${e.message ?: "unknown error"}")
-                        } finally {
-                            loading = false
-                        }
-                    }
-                },
+                onClick = authChoiceScreenModel::chooseAnonymous,
                 enabled = !loading,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -91,4 +82,3 @@ class AuthChoiceScreen : Screen {
         }
     }
 }
-

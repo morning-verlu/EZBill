@@ -5,11 +5,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.SupabaseClient.supabase
+import org.kukro.ezbill.SupabaseService
 import org.kukro.ezbill.models.CreateExpenseData
 import org.kukro.ezbill.models.Expense
 
@@ -20,7 +19,7 @@ class EditExpenseScreenModel(
         private set
 
     var expenseAmountText by mutableStateOf("")
-    var selectedPayerId: String? by mutableStateOf(supabase.auth.currentUserOrNull()?.id)
+    var selectedPayerId: String? by mutableStateOf(userId)
     var createdId by mutableStateOf("")
     private var job: Job? = null
 
@@ -62,31 +61,34 @@ class EditExpenseScreenModel(
     suspend fun createExpense(
         expenseData: CreateExpenseData
     ): Expense {
-        val result = supabase.postgrest["expenses"].insert(expenseData) {
-            select()
-        }
-
-        return result.decodeList<Expense>().first()
+        return SupabaseService.createExpense(expenseData)
     }
 
     fun submit(onDone: () -> Unit) {
+        if (state is EditExpenseUIState.Loading) return
         state = EditExpenseUIState.Loading
-        try {
-            job = screenModelScope.launch {
-                val amountValue = expenseData.amount
-                if (amountValue <= 0) {
-                    state = EditExpenseUIState.Error("金额不合法")
-                    return@launch
-                }
-
-                createExpense(expenseData)
-                onDone()
+        job?.cancel()
+        job = screenModelScope.launch {
+            val amountValue = expenseData.amount
+            if (amountValue <= 0) {
+                state = EditExpenseUIState.Error("金额不合法")
+                return@launch
             }
-        } catch (e: Exception) {
-            println("create expense failed,${e.message}")
-            state = EditExpenseUIState.Error(e.message ?: "创建失败")
-        } finally {
-            state = EditExpenseUIState.Idle
+
+            try {
+                createExpense(expenseData)
+                state = EditExpenseUIState.Success("创建成功")
+                onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("create expense failed,${e.message}")
+                state = EditExpenseUIState.Error(e.message ?: "创建失败")
+            } finally {
+                if (state is EditExpenseUIState.Loading) {
+                    state = EditExpenseUIState.Idle
+                }
+            }
         }
     }
 }
@@ -97,4 +99,3 @@ sealed class EditExpenseUIState {
     data class Success(val msg: String) : EditExpenseUIState()
     data class Error(val msg: String) : EditExpenseUIState()
 }
-

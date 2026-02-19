@@ -7,8 +7,15 @@ import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
 import org.kukro.ezbill.SupabaseClient.supabase
+import org.kukro.ezbill.models.CreateExpenseData
+import org.kukro.ezbill.models.Expense
+import org.kukro.ezbill.models.ExpenseShareRow
 import org.kukro.ezbill.models.MembershipWithSpace
 import org.kukro.ezbill.models.Profile
+import org.kukro.ezbill.models.SettlementInsertRow
+import org.kukro.ezbill.models.SettlementItemInsertRow
+import org.kukro.ezbill.models.SettlementRow
+import org.kukro.ezbill.models.SettlementTransferInput
 import org.kukro.ezbill.models.Space
 import kotlin.time.Clock
 
@@ -20,6 +27,63 @@ object SupabaseService {
             mapOf("p_name" to name, "p_display_name" to displayName)
         )
         return result.decodeAs<Space>()
+    }
+
+    suspend fun createExpense(expenseData: CreateExpenseData): Expense {
+        val result = supabase.postgrest["expenses"].insert(expenseData) {
+            select()
+        }
+        return result.decodeList<Expense>().first()
+    }
+
+    suspend fun fetchExpensesBySpace(spaceId: String): List<Expense> {
+        return supabase.postgrest["expenses"].select {
+            filter { eq("space_id", spaceId) }
+        }.decodeList()
+    }
+
+    suspend fun fetchExpenseSharesByExpenseIds(expenseIds: List<String>): List<ExpenseShareRow> {
+        if (expenseIds.isEmpty()) return emptyList()
+        return supabase.postgrest["expense_shares"].select {
+            filter { isIn("expense_id", expenseIds) }
+        }.decodeList()
+    }
+
+    suspend fun saveSettlement(
+        spaceId: String,
+        note: String?,
+        transfers: List<SettlementTransferInput>
+    ): SettlementRow {
+        val currentUserId = supabase.auth.currentUserOrNull()?.id
+            ?: throw IllegalStateException("当前用户未登录")
+
+        val settlementRow = supabase.postgrest["settlements"].insert(
+            SettlementInsertRow(
+                spaceId = spaceId,
+                createdBy = currentUserId,
+                note = note,
+                status = "open",
+                rangeStart = null,
+                rangeEnd = null
+            )
+        ) {
+            select()
+        }.decodeList<SettlementRow>().first()
+
+        val transferRows = transfers.map {
+            SettlementItemInsertRow(
+                settlementId = settlementRow.id,
+                fromUserId = it.fromUserId,
+                toUserId = it.toUserId,
+                amount = it.amount
+            )
+        }
+
+        if (transferRows.isNotEmpty()) {
+            supabase.postgrest["settlement_items"].insert(transferRows)
+        }
+
+        return settlementRow
     }
 
 
