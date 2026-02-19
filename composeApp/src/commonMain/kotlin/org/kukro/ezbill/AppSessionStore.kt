@@ -16,6 +16,7 @@ import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import com.russhwolf.settings.Settings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -34,6 +35,7 @@ import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
 import org.kukro.ezbill.models.SpaceMember
 import kotlin.random.Random
+import kotlin.time.Clock
 
 object AppSessionStore {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -46,6 +48,8 @@ object AppSessionStore {
     private var membersChannel: RealtimeChannel? = null
     private var expensesCollectJob: Job? = null
     private var membersCollectJob: Job? = null
+    private var foregroundRecoverJob: Job? = null
+    private var lastForegroundRecoverAtMs: Long = 0L
 
     private val _state = MutableStateFlow(
         AppSessionState(
@@ -90,6 +94,28 @@ object AppSessionStore {
                 }
             }
         }
+    }
+
+    fun onAppForeground() {
+        start()
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (now - lastForegroundRecoverAtMs < FOREGROUND_RECOVER_MIN_INTERVAL_MS) return
+        lastForegroundRecoverAtMs = now
+
+        foregroundRecoverJob?.cancel()
+        foregroundRecoverJob = scope.launch {
+            try {
+                recoverAfterForeground()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                println("AppSessionStore.onAppForeground failed message=${e.message}")
+            }
+        }
+    }
+
+    fun onAppBackground() {
+        clearSubscriptions()
     }
 
     suspend fun switchSpace(space: Space) {
@@ -368,12 +394,14 @@ object AppSessionStore {
             channel
                 .postgresChangeFlow<PostgresAction.Insert>("public") {
                     table = "expenses"
+                    filter("space_id", FilterOperator.EQ, spaceId)
                 }
                 .collect { payload ->
                     val item = runCatching { payload.decodeRecord<Expense>() }.getOrNull() ?: return@collect
                     val current = _state.value
                     if (current.selectedSpace?.id != spaceId) return@collect
-                    _state.value = current.copy(expenses = current.expenses + item)
+                    if (current.expenses.any { it.id == item.id }) return@collect
+                    _state.value = current.copy(expenses = listOf(item) + current.expenses)
                 }
         }
         scope.launch { channel.subscribe() }
@@ -413,11 +441,52 @@ object AppSessionStore {
         membersCollectJob?.cancel()
         expensesCollectJob = null
         membersCollectJob = null
+
+        val oldExpensesChannel = expensesChannel
+        val oldMembersChannel = membersChannel
+        expensesChannel = null
+        membersChannel = null
+
         scope.launch {
-            expensesChannel?.unsubscribe()
-            membersChannel?.unsubscribe()
-            expensesChannel = null
-            membersChannel = null
+            oldExpensesChannel?.unsubscribe()
+            oldMembersChannel?.unsubscribe()
+        }
+    }
+
+    private suspend fun recoverAfterForeground() {
+        val authUserId = supabase.auth.currentUserOrNull()?.id ?: return
+        val current = _state.value
+        val selectedSpace = current.selectedSpace
+        val selectedSpaceId = selectedSpace?.id?.takeIf { it.isNotBlank() }
+
+        val shouldBootstrap = current.currentUserId == null ||
+                current.currentUserId != authUserId ||
+                current.status is AppSessionStatus.Unauthenticated ||
+                current.status is AppSessionStatus.Error ||
+                selectedSpaceId == null
+
+        if (shouldBootstrap) {
+            bootstrapAuthenticated(
+                selectedSpaceId = selectedSpaceId,
+                fallbackSelectedSpace = selectedSpace
+            )
+            return
+        }
+
+        try {
+            val members = loadMembers(selectedSpaceId)
+            val expenses = loadExpenses(selectedSpaceId)
+            val memberProfiles = loadProfilesForMembers(members, current.profile)
+            _state.value = _state.value.copy(
+                status = AppSessionStatus.Ready,
+                members = members,
+                expenses = expenses,
+                memberProfiles = memberProfiles
+            )
+        } catch (e: Exception) {
+            println("AppSessionStore.recoverAfterForeground refresh failed message=${e.message}")
+        } finally {
+            subscribeForSpace(selectedSpaceId)
         }
     }
 
@@ -465,6 +534,8 @@ object AppSessionStore {
         val raw = settings.getStringOrNull(KEY_AUTH_PREFERENCE) ?: return null
         return AuthPreference.entries.firstOrNull { it.name == raw }
     }
+
+    private const val FOREGROUND_RECOVER_MIN_INTERVAL_MS = 1_500L
 }
 
 private fun generateUsername(): String {

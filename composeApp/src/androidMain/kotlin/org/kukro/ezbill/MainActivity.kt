@@ -16,6 +16,16 @@ class MainActivity : ComponentActivity() {
             App()
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        AppSessionStore.onAppForeground()
+    }
+
+    override fun onStop() {
+        AppSessionStore.onAppBackground()
+        super.onStop()
+    }
 }
 
 @Preview
