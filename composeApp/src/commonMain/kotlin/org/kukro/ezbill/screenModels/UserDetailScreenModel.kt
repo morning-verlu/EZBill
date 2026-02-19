@@ -7,6 +7,7 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ class UserDetailScreenModel : ScreenModel {
 
     private val _snackBar = MutableSharedFlow<String>()
     val snackBar = _snackBar.asSharedFlow()
+    private val maxAvatarBytes = 5 * 1024 * 1024
 
     init {
         AppSessionStore.start()
@@ -148,6 +150,32 @@ class UserDetailScreenModel : ScreenModel {
         }
     }
 
+    fun submitPickedAvatar(imageBytes: ByteArray?) {
+        if (imageBytes == null) return
+        if (imageBytes.size > maxAvatarBytes) {
+            screenModelScope.launch {
+                emitSnackBar("不能大于5MB")
+            }
+            return
+        }
+        updateAvatarOnly(imageBytes)
+    }
+
+    fun signOut() {
+        screenModelScope.launch {
+            onShowTopLoading(true)
+            try {
+                AppSessionStore.signOut()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emitSnackBar("退出失败: ${e.message ?: "unknown error"}")
+            } finally {
+                onShowTopLoading(false)
+            }
+        }
+    }
+
     private fun validateUpdateInput(
         rawEmail: String,
         password: String,
@@ -199,18 +227,21 @@ class UserDetailScreenModel : ScreenModel {
         return emailError == null && passwordError == null && confirmError == null
     }
 
-    suspend fun updateAvatarOnly(imageBytes: ByteArray): Profile {
-        state = state.copy(isAvatarUploading = true)
-        emitSnackBar("开始上传头像...")
-        return try {
-            AppSessionStore.updateAvatarOnly(imageBytes)
-            emitSnackBar("头像更新成功")
-            state.profile
-        } catch (e: Exception) {
-            emitSnackBar("头像更新失败: ${e.message ?: "unknown error"}")
-            state.profile
-        } finally {
-            state = state.copy(isAvatarUploading = false)
+    fun updateAvatarOnly(imageBytes: ByteArray) {
+        if (state.isAvatarUploading) return
+        screenModelScope.launch {
+            state = state.copy(isAvatarUploading = true)
+            emitSnackBar("开始上传头像...")
+            try {
+                AppSessionStore.updateAvatarOnly(imageBytes)
+                emitSnackBar("头像更新成功")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emitSnackBar("头像更新失败: ${e.message ?: "unknown error"}")
+            } finally {
+                state = state.copy(isAvatarUploading = false)
+            }
         }
     }
 

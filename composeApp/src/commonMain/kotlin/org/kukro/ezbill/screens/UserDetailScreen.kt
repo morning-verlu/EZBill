@@ -49,7 +49,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.rememberImagePicker
 import org.kukro.ezbill.screenModels.UserDetailScreenModel
@@ -136,15 +135,7 @@ class UserDetailScreen : Screen {
                                 scope.launch {
                                     val bytes = picker.pickImageBytes()
                                     println("picked bytes = ${bytes?.size}")
-                                    bytes?.size?.let {
-                                        if (it > 5 * 1024 * 1024) {
-                                            hostState.showSnackbar("不能大于5MB")
-                                            return@launch
-                                        }
-                                    }
-                                    bytes?.let {
-                                        userDetailScreenModel.updateAvatarOnly(it)
-                                    }
+                                    userDetailScreenModel.submitPickedAvatar(bytes)
                                 }
                             })
                     )
@@ -178,14 +169,7 @@ class UserDetailScreen : Screen {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
-                    onClick = {
-                        scope.launch {
-                            runCatching { AppSessionStore.signOut() }
-                                .onFailure {
-                                    hostState.showSnackbar("退出失败: ${it.message ?: "unknown error"}")
-                                }
-                        }
-                    },
+                    onClick = userDetailScreenModel::signOut,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                 ) {
                     Text("退出登录")

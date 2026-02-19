@@ -167,19 +167,19 @@ object AppSessionStore {
     }
 
     suspend fun signInWithEmail(email: String, password: String) {
-        saveAuthPreference(AuthPreference.EMAIL)
         supabase.auth.signInWith(Email) {
             this.email = email
             this.password = password
         }
+        saveAuthPreference(AuthPreference.EMAIL)
     }
 
     suspend fun signUpWithEmail(email: String, password: String) {
-        saveAuthPreference(AuthPreference.EMAIL)
         supabase.auth.signUpWith(Email) {
             this.email = email
             this.password = password
         }
+        saveAuthPreference(AuthPreference.EMAIL)
     }
 
     suspend fun signOut() {
