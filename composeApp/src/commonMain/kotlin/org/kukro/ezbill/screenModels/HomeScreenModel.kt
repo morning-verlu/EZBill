@@ -132,6 +132,25 @@ class HomeScreenModel : ScreenModel {
         state = state.copy(expandedFabButtons = show)
     }
 
+    fun refreshExpenses() {
+        val currentSpace = state.space
+        if (currentSpace.id.isBlank()) return
+        if (state.isPullRefreshing) return
+
+        screenModelScope.launch {
+            state = state.copy(isPullRefreshing = true)
+            try {
+                AppSessionStore.switchSpace(currentSpace)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError(e.message.toString())
+            } finally {
+                state = state.copy(isPullRefreshing = false)
+            }
+        }
+    }
+
     private fun setLoading() {
         uiState = HomeUiState.Loading
         println("HomeScreenModel.setLoading uiState=Loading")
@@ -230,7 +249,8 @@ data class HomeState(
     val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaceMembers: List<SpaceMember> = emptyList(),
     val isAvatarUploading: Boolean = false,
-    val isDataLoading: Boolean = false
+    val isDataLoading: Boolean = false,
+    val isPullRefreshing: Boolean = false
 )
 
 sealed class HomeUiState {

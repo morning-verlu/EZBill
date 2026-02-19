@@ -40,6 +40,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -494,22 +496,30 @@ class HomeScreen : Screen {
                 Spacer(Modifier.height(16.dp))
 
                 AnimatedVisibility(homeScreenModel.state.expenses.isNotEmpty()) {
-                    LazyColumn {
-                        val memberNameMap = homeScreenModel.state.spaceMembers.associate { member ->
-                            member.userId to (member.displayName?.takeIf { it.isNotBlank() }
-                                ?: member.userId.take(6))
-                        }
+                    val pullRefreshState = rememberPullToRefreshState()
+                    PullToRefreshBox(
+                        state = pullRefreshState,
+                        isRefreshing = homeScreenModel.state.isPullRefreshing,
+                        onRefresh = homeScreenModel::refreshExpenses
+                    ) {
+                        LazyColumn {
+                            val memberNameMap =
+                                homeScreenModel.state.spaceMembers.associate { member ->
+                                    member.userId to (member.displayName?.takeIf { it.isNotBlank() }
+                                            ?: member.userId.take(6))
+                                }
 
-                        item {
-                            Text("账单记录", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(16.dp))
-                        }
+                            item {
+                                Text("账单记录", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(16.dp))
+                            }
 
-                        items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
-                            ExpenseItemCard(
-                                expense = expense,
-                                payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
-                            )
+                            items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
+                                ExpenseItemCard(
+                                    expense = expense,
+                                    payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
+                                )
+                            }
                         }
                     }
                 }
