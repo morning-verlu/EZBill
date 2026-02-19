@@ -37,6 +37,8 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
+            implementation(libs.compottie)
+            implementation(libs.compottie.resources)
             implementation(libs.multiplatform.settings)
             implementation(libs.multiplatform.settings.coroutines)
             implementation(compose.materialIconsExtended)
@@ -94,6 +96,5 @@ android {
 dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
-
 
 
