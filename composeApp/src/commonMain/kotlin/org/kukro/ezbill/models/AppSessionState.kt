@@ -8,18 +8,11 @@ sealed interface AppSessionStatus {
     data class Error(val message: String) : AppSessionStatus
 }
 
-enum class AuthPreference {
-    ANONYMOUS,
-    EMAIL
-}
-
 data class AppSessionState(
     val status: AppSessionStatus = AppSessionStatus.Initializing,
     val currentUserId: String? = null,
     val currentUserEmail: String? = null,
     val isAnonymousUser: Boolean = false,
-    val hasChosenAuthMethod: Boolean = false,
-    val preferredAuthMethod: AuthPreference? = null,
     val profile: Profile? = null,
     val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaces: List<Space> = emptyList(),

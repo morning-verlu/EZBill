@@ -15,7 +15,6 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
-import com.russhwolf.settings.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +31,6 @@ import kotlinx.coroutines.withContext
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.models.AppSessionState
 import org.kukro.ezbill.models.AppSessionStatus
-import org.kukro.ezbill.models.AuthPreference
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
@@ -55,12 +53,7 @@ object AppSessionStore {
     private var foregroundRecoverJob: Job? = null
     private var lastForegroundRecoverAtMs: Long = 0L
 
-    private val _state = MutableStateFlow(
-        AppSessionState(
-            hasChosenAuthMethod = settings.getBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false),
-            preferredAuthMethod = readAuthPreference()
-        )
-    )
+    private val _state = MutableStateFlow(AppSessionState())
     val state: StateFlow<AppSessionState> = _state.asStateFlow()
 
     fun start() {
@@ -195,7 +188,6 @@ object AppSessionStore {
     }
 
     suspend fun chooseAnonymous() {
-        saveAuthPreference(AuthPreference.ANONYMOUS)
         signInAnonymous()
     }
 
@@ -205,7 +197,6 @@ object AppSessionStore {
             this.password = password
         }
         enforceSingleSession()
-        saveAuthPreference(AuthPreference.EMAIL)
     }
 
     suspend fun signUpWithEmail(email: String, password: String) {
@@ -214,20 +205,15 @@ object AppSessionStore {
             this.password = password
         }
         enforceSingleSession()
-        saveAuthPreference(AuthPreference.EMAIL)
     }
 
     suspend fun signOut() = withContext(NonCancellable) {
         isSigningOut = true
         try {
             bootstrapMutex.withLock {
-                settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, false)
-                settings.remove(KEY_AUTH_PREFERENCE)
                 clearSubscriptions()
                 _state.value = AppSessionState(
-                    status = AppSessionStatus.Unauthenticated,
-                    hasChosenAuthMethod = false,
-                    preferredAuthMethod = null
+                    status = AppSessionStatus.Unauthenticated
                 )
                 runCatching {
                     supabase.auth.signOut(scope = SignOutScope.LOCAL)
@@ -281,9 +267,7 @@ object AppSessionStore {
                     status = AppSessionStatus.Loading,
                     currentUserId = currentUserId,
                     currentUserEmail = currentUserEmail,
-                    isAnonymousUser = isAnonymousUser,
-                    hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
-                    preferredAuthMethod = _state.value.preferredAuthMethod
+                    isAnonymousUser = isAnonymousUser
                 )
                 if (isSigningOut) return@withLock
 
@@ -326,8 +310,6 @@ object AppSessionStore {
                     currentUserId = currentUserId,
                     currentUserEmail = currentUserEmail,
                     isAnonymousUser = isAnonymousUser,
-                    hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
-                    preferredAuthMethod = _state.value.preferredAuthMethod,
                     profile = profile,
                     memberProfiles = memberProfiles,
                     spaces = spacesWithFallback,
@@ -362,9 +344,7 @@ object AppSessionStore {
 
     private fun clearData(status: AppSessionStatus) {
         _state.value = AppSessionState(
-            status = status,
-            hasChosenAuthMethod = _state.value.hasChosenAuthMethod,
-            preferredAuthMethod = _state.value.preferredAuthMethod
+            status = status
         )
         clearSubscriptions()
     }
@@ -553,20 +533,6 @@ object AppSessionStore {
         }
     }
 
-    private fun saveAuthPreference(preference: AuthPreference) {
-        settings.putBoolean(KEY_HAS_CHOSEN_AUTH_METHOD, true)
-        settings.putString(KEY_AUTH_PREFERENCE, preference.name)
-        _state.value = _state.value.copy(
-            hasChosenAuthMethod = true,
-            preferredAuthMethod = preference
-        )
-    }
-
-    private fun readAuthPreference(): AuthPreference? {
-        val raw = settings.getStringOrNull(KEY_AUTH_PREFERENCE) ?: return null
-        return AuthPreference.entries.firstOrNull { it.name == raw }
-    }
-
     private const val FOREGROUND_RECOVER_MIN_INTERVAL_MS = 1_500L
 }
 
@@ -583,7 +549,3 @@ private fun generateUsername(): String {
     )
     return adjectives[Random.nextInt(adjectives.size)] + nouns[Random.nextInt(nouns.size)]
 }
-    private const val KEY_HAS_CHOSEN_AUTH_METHOD = "has_chosen_auth_method"
-    private const val KEY_AUTH_PREFERENCE = "auth_preference"
-
-    private val settings = Settings()

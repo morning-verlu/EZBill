@@ -19,9 +19,7 @@ import androidx.compose.ui.Modifier
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import org.kukro.ezbill.models.AppSessionStatus
-import org.kukro.ezbill.models.AuthPreference
 import org.kukro.ezbill.screens.AuthChoiceScreen
-import org.kukro.ezbill.screens.EmailAuthScreen
 import org.kukro.ezbill.screens.HomeScreen
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.ui.theme.EzBillTheme
@@ -29,8 +27,7 @@ import org.kukro.ezbill.ui.theme.EzBillTheme
 private enum class RootRoute {
     LOADING,
     HOME,
-    AUTH_CHOICE,
-    EMAIL_AUTH
+    AUTH_CHOICE
 }
 
 @Composable
@@ -39,31 +36,16 @@ fun App() {
         val hostState = remember { SnackbarHostState() }
         val homeScreen = remember { HomeScreen() }
         val authChoiceScreen = remember { AuthChoiceScreen() }
-        val emailAuthScreen = remember { EmailAuthScreen() }
         LaunchedEffect(Unit) {
             AppSessionStore.start()
         }
         val appState by AppSessionStore.state.collectAsState()
-
-        LaunchedEffect(appState.status, appState.preferredAuthMethod) {
-            if (appState.status is AppSessionStatus.Unauthenticated &&
-                appState.hasChosenAuthMethod &&
-                appState.preferredAuthMethod == AuthPreference.ANONYMOUS
-            ) {
-                runCatching { AppSessionStore.chooseAnonymous() }
-            }
-        }
 
         CompositionLocalProvider(LocalSnackBarHostState provides hostState) {
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState) }
             ) { innerPadding ->
                 val rootRoute = when {
-                    appState.status is AppSessionStatus.Unauthenticated &&
-                            appState.preferredAuthMethod == AuthPreference.EMAIL -> {
-                        RootRoute.EMAIL_AUTH
-                    }
-
                     appState.status is AppSessionStatus.Unauthenticated -> {
                         RootRoute.AUTH_CHOICE
                     }
@@ -85,7 +67,6 @@ fun App() {
                     RootRoute.LOADING -> null
                     RootRoute.HOME -> homeScreen
                     RootRoute.AUTH_CHOICE -> authChoiceScreen
-                    RootRoute.EMAIL_AUTH -> emailAuthScreen
                 }
                 key(rootRoute) {
                     if (rootScreen == null) {

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -170,7 +171,13 @@ class UserDetailScreen : Screen {
 
                 Button(
                     onClick = userDetailScreenModel::signOut,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer, // 按钮背景
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer   // 文字/图标颜色（对应 errorContainer 的文字色）
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
                 ) {
                     Text("退出登录")
                 }
