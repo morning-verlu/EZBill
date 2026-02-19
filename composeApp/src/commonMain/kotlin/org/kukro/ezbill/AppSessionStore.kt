@@ -16,15 +16,19 @@ import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import com.russhwolf.settings.Settings
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,7 +44,12 @@ import kotlin.random.Random
 import kotlin.time.Clock
 
 object AppSessionStore {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val coroutineErrorHandler = CoroutineExceptionHandler { _, throwable ->
+        if (throwable is CancellationException) return@CoroutineExceptionHandler
+        println("AppSessionStore.unhandledCoroutineError message=${throwable.message}")
+    }
+    private val scopeContext: CoroutineContext = SupervisorJob() + Dispatchers.Main + coroutineErrorHandler
+    private val scope = CoroutineScope(scopeContext)
     private var started = false
     private var sessionJob: Job? = null
     private val bootstrapMutex = Mutex()
@@ -61,38 +70,48 @@ object AppSessionStore {
     fun start() {
         if (started) return
         started = true
-        sessionJob = scope.launch {
-            supabase.auth.sessionStatus.collect { status ->
-                when (status) {
-                    is SessionStatus.Initializing -> {
-                        if (isSigningOut) return@collect
-                        _state.value = _state.value.copy(status = AppSessionStatus.Initializing)
-                    }
+        sessionJob = safeLaunch("sessionStatus.collect") {
+            while (isActive) {
+                try {
+                    supabase.auth.sessionStatus.collect { status ->
+                        when (status) {
+                            is SessionStatus.Initializing -> {
+                                if (isSigningOut) return@collect
+                                _state.value = _state.value.copy(status = AppSessionStatus.Initializing)
+                            }
 
-                    is SessionStatus.NotAuthenticated -> {
-                        clearData(AppSessionStatus.Unauthenticated)
-                    }
+                            is SessionStatus.NotAuthenticated -> {
+                                clearData(AppSessionStatus.Unauthenticated)
+                            }
 
-                    is SessionStatus.Authenticated -> {
-                        if (isSigningOut) return@collect
-                        if (isBootstrapping) return@collect
-                        val authUserId = supabase.auth.currentUserOrNull()?.id
-                        val current = _state.value
-                        val alreadyReadyForSameUser =
-                            current.status is AppSessionStatus.Ready &&
-                                    current.currentUserId != null &&
-                                    current.currentUserId == authUserId
-                        if (!alreadyReadyForSameUser) {
-                            bootstrapAuthenticated()
+                            is SessionStatus.Authenticated -> {
+                                if (isSigningOut) return@collect
+                                if (isBootstrapping) return@collect
+                                val authUserId = supabase.auth.currentUserOrNull()?.id
+                                val current = _state.value
+                                val alreadyReadyForSameUser =
+                                    current.status is AppSessionStatus.Ready &&
+                                            current.currentUserId != null &&
+                                            current.currentUserId == authUserId
+                                if (!alreadyReadyForSameUser) {
+                                    bootstrapAuthenticated()
+                                }
+                            }
+
+                            is SessionStatus.RefreshFailure -> {
+                                if (isSigningOut) return@collect
+                                _state.value = _state.value.copy(
+                                    status = AppSessionStatus.Error("Session refresh failed")
+                                )
+                            }
                         }
                     }
-
-                    is SessionStatus.RefreshFailure -> {
-                        if (isSigningOut) return@collect
-                        _state.value = _state.value.copy(
-                            status = AppSessionStatus.Error("Session refresh failed")
-                        )
-                    }
+                    return@safeLaunch
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    println("AppSessionStore.sessionStatus.collect failed message=${e.message}")
+                    delay(1_000)
                 }
             }
         }
@@ -105,14 +124,8 @@ object AppSessionStore {
         lastForegroundRecoverAtMs = now
 
         foregroundRecoverJob?.cancel()
-        foregroundRecoverJob = scope.launch {
-            try {
-                recoverAfterForeground()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                println("AppSessionStore.onAppForeground failed message=${e.message}")
-            }
+        foregroundRecoverJob = safeLaunch("foregroundRecover") {
+            recoverAfterForeground()
         }
     }
 
@@ -409,7 +422,7 @@ object AppSessionStore {
     private fun subscribeExpenses(spaceId: String) {
         val channel = supabase.realtime.channel("expenses-$spaceId")
         expensesChannel = channel
-        expensesCollectJob = scope.launch {
+        expensesCollectJob = safeLaunch("expenses.collect spaceId=$spaceId") {
             channel
                 .postgresChangeFlow<PostgresAction.Insert>("public") {
                     table = "expenses"
@@ -423,13 +436,15 @@ object AppSessionStore {
                     _state.value = current.copy(expenses = listOf(item) + current.expenses)
                 }
         }
-        scope.launch { channel.subscribe() }
+        safeLaunch("expenses.subscribe spaceId=$spaceId") {
+            channel.subscribe()
+        }
     }
 
     private fun subscribeMembers(spaceId: String) {
         val channel = supabase.realtime.channel("members-$spaceId")
         membersChannel = channel
-        membersCollectJob = scope.launch {
+        membersCollectJob = safeLaunch("members.collect spaceId=$spaceId") {
             channel
                 .postgresChangeFlow<PostgresAction.Insert>("public") {
                     table = "space_memberships"
@@ -452,7 +467,9 @@ object AppSessionStore {
                     )
                 }
         }
-        scope.launch { channel.subscribe() }
+        safeLaunch("members.subscribe spaceId=$spaceId") {
+            channel.subscribe()
+        }
     }
 
     private fun clearSubscriptions() {
@@ -466,9 +483,11 @@ object AppSessionStore {
         expensesChannel = null
         membersChannel = null
 
-        scope.launch {
-            oldExpensesChannel?.unsubscribe()
-            oldMembersChannel?.unsubscribe()
+        safeLaunch("clearSubscriptions.unsubscribe") {
+            runCatching { oldExpensesChannel?.unsubscribe() }
+                .onFailure { println("AppSessionStore.unsubscribe expenses failed message=${it.message}") }
+            runCatching { oldMembersChannel?.unsubscribe() }
+                .onFailure { println("AppSessionStore.unsubscribe members failed message=${it.message}") }
         }
     }
 
@@ -545,6 +564,19 @@ object AppSessionStore {
             supabase.auth.signOut(scope = SignOutScope.OTHERS)
         }.onFailure {
             println("AppSessionStore.enforceSingleSession failed message=${it.message}")
+        }
+    }
+
+    private fun safeLaunch(
+        name: String,
+        block: suspend CoroutineScope.() -> Unit
+    ): Job = scope.launch {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            println("AppSessionStore.safeLaunch($name) failed message=${e.message}")
         }
     }
 
