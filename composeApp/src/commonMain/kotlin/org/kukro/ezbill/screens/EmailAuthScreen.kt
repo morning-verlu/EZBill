@@ -165,10 +165,6 @@ class EmailAuthScreen : Screen {
                 Button(
                     onClick = emailAuthScreenModel::signIn,
                     enabled = !state.loading,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -181,8 +177,8 @@ class EmailAuthScreen : Screen {
                     onClick = emailAuthScreenModel::signUp,
                     enabled = !state.loading,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
