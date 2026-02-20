@@ -1,18 +1,17 @@
 package org.kukro.ezbill.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -25,17 +24,15 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,8 +42,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -68,6 +67,7 @@ class EmailAuthScreen : Screen {
         val hostState = LocalSnackBarHostState.current
         val state = emailAuthScreenModel.state
         var passwordVisible by remember { mutableStateOf(false) }
+        val focusRequester = remember { FocusRequester() }
 
         LaunchedEffect(Unit) {
             emailAuthScreenModel.snackBar.collect { msg ->
@@ -115,12 +115,17 @@ class EmailAuthScreen : Screen {
                 }
 
                 Text(
-                    text = "使用邮箱和密码登录后即可同步账本数据",
+                    text = "使用邮箱和密码登录后即可稳定同步数据",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(Modifier.height(2.dp))
+                val keyboard = LocalSoftwareKeyboardController.current
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                    keyboard?.show()
+                }
 
                 AuthInputCard(
                     value = state.email,
@@ -131,7 +136,7 @@ class EmailAuthScreen : Screen {
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next
-                    )
+                    ),
                 )
                 AuthInputCard(
                     value = state.password,
@@ -156,9 +161,14 @@ class EmailAuthScreen : Screen {
                 )
 
                 Spacer(Modifier.height(2.dp))
+
                 Button(
                     onClick = emailAuthScreenModel::signIn,
                     enabled = !state.loading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -166,9 +176,14 @@ class EmailAuthScreen : Screen {
                 ) {
                     Text("登录")
                 }
-                OutlinedButton(
+
+                Button(
                     onClick = emailAuthScreenModel::signUp,
                     enabled = !state.loading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -190,6 +205,7 @@ private fun AuthInputCard(
     label: String,
     placeholder: String,
     leadingIcon: ImageVector,
+    modifier: Modifier = Modifier,
     isPassword: Boolean = false,
     passwordVisible: Boolean = false,
     onTogglePasswordVisible: (() -> Unit)? = null,
@@ -197,48 +213,48 @@ private fun AuthInputCard(
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            shape = CircleShape
-                        )
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = leadingIcon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
                     )
                 }
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 52.dp, top = 5.dp)
-                )
                 if (isPassword && onTogglePasswordVisible != null) {
                     IconButton(
                         onClick = onTogglePasswordVisible,
-                        modifier = Modifier.align(Alignment.CenterEnd)
+                        modifier = Modifier
                     ) {
                         Icon(
                             imageVector = if (passwordVisible) {
-                                Icons.Filled.VisibilityOff
-                            } else {
                                 Icons.Filled.Visibility
+                            } else {
+                                Icons.Filled.VisibilityOff
                             },
-                            contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                            contentDescription = if (passwordVisible) "显示密码" else "隐藏密码",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
@@ -30,9 +28,9 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import ezbill.composeapp.generated.resources.Res
 import ezbill.composeapp.generated.resources.ezbill_logo
+import org.jetbrains.compose.resources.painterResource
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.screenModels.AuthChoiceScreenModel
-import org.jetbrains.compose.resources.painterResource
 
 class AuthChoiceScreen : Screen {
     @Composable
@@ -79,11 +77,6 @@ class AuthChoiceScreen : Screen {
 
                 Spacer(Modifier.height(20.dp))
 
-                Text(
-                    text = "选择登录方式",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
 
                 Spacer(Modifier.height(24.dp))
 

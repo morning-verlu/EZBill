@@ -118,8 +118,9 @@ object AppSessionStore {
 
     fun onAppForeground() {
         start()
+        val hasActiveSubscriptions = expensesChannel != null || membersChannel != null
         val now = Clock.System.now().toEpochMilliseconds()
-        if (now - lastForegroundRecoverAtMs < FOREGROUND_RECOVER_MIN_INTERVAL_MS) return
+        if (hasActiveSubscriptions && now - lastForegroundRecoverAtMs < FOREGROUND_RECOVER_MIN_INTERVAL_MS) return
         lastForegroundRecoverAtMs = now
 
         foregroundRecoverJob?.cancel()
@@ -129,6 +130,8 @@ object AppSessionStore {
     }
 
     fun onAppBackground() {
+        foregroundRecoverJob?.cancel()
+        foregroundRecoverJob = null
         clearSubscriptions()
     }
 
