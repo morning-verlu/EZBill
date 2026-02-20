@@ -1,6 +1,7 @@
 package org.kukro.ezbill.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -43,18 +44,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,15 +94,11 @@ class HomeScreen : Screen {
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
-        val expenseListState = rememberLazyListState()
-        val shouldShowMemberSection by remember(homeScreenModel.state.expenses.isNotEmpty()) {
+        val homeListState = rememberLazyListState()
+        val shouldShowMemberSection by remember {
             derivedStateOf {
-                if (homeScreenModel.state.expenses.isEmpty()) {
-                    true
-                } else {
-                    expenseListState.firstVisibleItemIndex == 0 &&
-                        expenseListState.firstVisibleItemScrollOffset <= 0
-                }
+                homeListState.firstVisibleItemIndex == 0 &&
+                        homeListState.firstVisibleItemScrollOffset < 48
             }
         }
 
@@ -321,6 +318,7 @@ class HomeScreen : Screen {
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(16.dp)
+                    .animateContentSize()
             ) {
                 val showTopLoading =
                     homeScreenModel.state.isAvatarUploading
@@ -501,43 +499,51 @@ class HomeScreen : Screen {
                         }
                     }
                 }
-                AnimatedVisibility(
-                    visible = shouldShowMemberSection,
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                val pullRefreshState = rememberPullToRefreshState()
+                val memberNameMap =
+                    homeScreenModel.state.spaceMembers.associate { member ->
+                        member.userId to (member.displayName?.takeIf { it.isNotBlank() }
+                            ?: member.userId.take(6))
+                    }
+                val allMemberIds = homeScreenModel.state.spaceMembers.map { it.userId }.toSet()
+                val participantIdsByExpense = homeScreenModel.state.expenseParticipantIds
+
+                PullToRefreshBox(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    state = pullRefreshState,
+                    isRefreshing = homeScreenModel.state.isPullRefreshing,
+                    onRefresh = homeScreenModel::refreshExpenses
                 ) {
-                    Column {
-                        MemberPreviewList(
-                            members = homeScreenModel.state.spaceMembers,
-                            maxCount = 6,
-                            currentUserId = homeScreenModel.state.currentUserId,
-                            memberProfiles = homeScreenModel.state.memberProfiles,
-                            onViewAll = {
-                                homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
-                                    navigator?.push(MembersScreen(spaceId = it))
+                    LazyColumn(state = homeListState, modifier = Modifier.fillMaxSize()) {
+                        if (homeScreenModel.state.spaceMembers.isNotEmpty()) {
+                            item {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = shouldShowMemberSection,
+                                    enter = fadeIn(),
+                                    exit = fadeOut()
+                                ) {
+                                    Column {
+                                        MemberPreviewList(
+                                            members = homeScreenModel.state.spaceMembers,
+                                            maxCount = 6,
+                                            currentUserId = homeScreenModel.state.currentUserId,
+                                            memberProfiles = homeScreenModel.state.memberProfiles,
+                                            onViewAll = {
+                                                homeScreenModel.state.space.id.takeIf { it.isNotBlank() }
+                                                    ?.let {
+                                                        navigator?.push(MembersScreen(spaceId = it))
+                                                    }
+                                            }
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                    }
                                 }
                             }
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-                }
+                        }
 
-                AnimatedVisibility(homeScreenModel.state.expenses.isNotEmpty()) {
-                    val pullRefreshState = rememberPullToRefreshState()
-                    PullToRefreshBox(
-                        state = pullRefreshState,
-                        isRefreshing = homeScreenModel.state.isPullRefreshing,
-                        onRefresh = homeScreenModel::refreshExpenses
-                    ) {
-                        LazyColumn(state = expenseListState) {
-                            val memberNameMap =
-                                homeScreenModel.state.spaceMembers.associate { member ->
-                                    member.userId to (member.displayName?.takeIf { it.isNotBlank() }
-                                            ?: member.userId.take(6))
-                                }
-                            val allMemberIds = homeScreenModel.state.spaceMembers.map { it.userId }.toSet()
-                            val participantIdsByExpense = homeScreenModel.state.expenseParticipantIds
-
+                        if (homeScreenModel.state.expenses.isNotEmpty()) {
                             item {
                                 Text("账单记录", style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(16.dp))
@@ -614,13 +620,21 @@ private fun ExpenseItemCard(
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                MetaChip(label = "付款：$payerDisplayName")
+                Text(
+                    text = "付款：$payerDisplayName",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 createdByDisplayName?.takeIf { it.isNotBlank() }?.let {
-                    MetaChip(label = "创建：$it")
+                    Text(
+                        text = "创建：$it",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -632,21 +646,6 @@ private fun ExpenseItemCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-@Composable
-private fun MetaChip(label: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -668,7 +667,7 @@ private fun formatExpenseTime(raw: String?): String {
     runCatching {
         val chinaDateTime = Instant.parse(raw).toLocalDateTime(CHINA_TIME_ZONE)
         return "${chinaDateTime.month.number.pad2()}-${chinaDateTime.day.pad2()} " +
-            "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
+                "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
     }
 
     val noZone = raw
