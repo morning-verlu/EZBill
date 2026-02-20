@@ -106,7 +106,6 @@ object AppSessionStore {
                             }
                         }
                     }
-                    return@safeLaunch
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

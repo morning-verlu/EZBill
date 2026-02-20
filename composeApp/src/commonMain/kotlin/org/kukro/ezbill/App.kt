@@ -72,7 +72,7 @@ fun App() {
                     }
 
                     else -> {
-                        RootRoute.AUTH_CHOICE
+                        RootRoute.LOADING
                     }
                 }
                 val shouldKeepLoading =
@@ -139,7 +139,7 @@ private fun RootLoadingScreen(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Image(
