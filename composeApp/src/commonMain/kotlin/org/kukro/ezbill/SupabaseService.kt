@@ -9,6 +9,7 @@ import io.ktor.http.ContentType
 import org.kukro.ezbill.SupabaseClient.supabase
 import org.kukro.ezbill.models.CreateExpenseData
 import org.kukro.ezbill.models.Expense
+import org.kukro.ezbill.models.ExpenseShareInsertRow
 import org.kukro.ezbill.models.ExpenseShareRow
 import org.kukro.ezbill.models.MembershipWithSpace
 import org.kukro.ezbill.models.Profile
@@ -18,6 +19,7 @@ import org.kukro.ezbill.models.SettlementRow
 import org.kukro.ezbill.models.SettlementTransferInput
 import org.kukro.ezbill.models.Space
 import kotlin.time.Clock
+import kotlin.math.roundToLong
 
 object SupabaseService {
 
@@ -30,10 +32,38 @@ object SupabaseService {
     }
 
     suspend fun createExpense(expenseData: CreateExpenseData): Expense {
+        return createExpense(expenseData, participantUserIds = emptyList())
+    }
+
+    suspend fun createExpense(
+        expenseData: CreateExpenseData,
+        participantUserIds: List<String>
+    ): Expense {
         val result = supabase.postgrest["expenses"].insert(expenseData) {
             select()
         }
-        return result.decodeList<Expense>().first()
+        val expense = result.decodeList<Expense>().first()
+
+        val participantIds = participantUserIds
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        if (participantIds.isEmpty()) return expense
+
+        val totalCents = (expense.amount * 100.0).roundToLong().toInt()
+        val base = totalCents / participantIds.size
+        val remainder = totalCents % participantIds.size
+
+        val shareRows = participantIds.mapIndexed { index, userId ->
+            val cents = base + if (index < remainder) 1 else 0
+            ExpenseShareInsertRow(
+                expenseId = expense.id,
+                userId = userId,
+                shareAmount = cents / 100.0
+            )
+        }
+        supabase.postgrest["expense_shares"].insert(shareRows)
+        return expense
     }
 
     suspend fun fetchExpensesBySpace(spaceId: String): List<Expense> {

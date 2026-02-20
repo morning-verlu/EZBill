@@ -22,3 +22,10 @@ data class CreateExpenseData(
     val note: String?,
     @SerialName("created_by") val createdBy: String
 )
+
+@Serializable
+data class ExpenseShareInsertRow(
+    @SerialName("expense_id") val expenseId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("share_amount") val shareAmount: Double
+)

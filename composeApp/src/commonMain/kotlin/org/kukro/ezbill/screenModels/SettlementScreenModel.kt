@@ -166,7 +166,17 @@ class SettlementScreenModel(
             if (newCredit == 0.0) j++
         }
 
+        val totalExpense = round2(expenses.sumOf { it.amount })
+        val participantCount = if (members.isNotEmpty()) {
+            members.map { it.userId }.distinct().size
+        } else {
+            userIds.size
+        }
+
         return SettlementPreview(
+            totalExpense = totalExpense,
+            participantCount = participantCount,
+            expenseCount = expenses.size,
             nets = nets,
             transfers = transfers
         )
@@ -182,6 +192,9 @@ sealed class SettlementUiState {
 }
 
 data class SettlementPreview(
+    val totalExpense: Double,
+    val participantCount: Int,
+    val expenseCount: Int,
     val nets: List<UserNet>,
     val transfers: List<TransferSuggestion>
 )

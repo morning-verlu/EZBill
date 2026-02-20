@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -51,11 +53,15 @@ class AuthChoiceScreen : Screen {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .statusBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
                 ) {
                     if (loading) {
                         LinearProgressIndicator(
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(999.dp))
                         )
                     }
                 }

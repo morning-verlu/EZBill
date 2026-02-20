@@ -1,6 +1,8 @@
 package org.kukro.ezbill.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,6 +52,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -68,12 +73,16 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
+import kotlin.time.Instant
 
 class HomeScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -84,6 +93,17 @@ class HomeScreen : Screen {
         val homeScreenModel = rememberScreenModel { HomeScreenModel() }
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
+        val expenseListState = rememberLazyListState()
+        val shouldShowMemberSection by remember(homeScreenModel.state.expenses.isNotEmpty()) {
+            derivedStateOf {
+                if (homeScreenModel.state.expenses.isEmpty()) {
+                    true
+                } else {
+                    expenseListState.firstVisibleItemIndex == 0 &&
+                        expenseListState.firstVisibleItemScrollOffset <= 0
+                }
+            }
+        }
 
 
         LaunchedEffect(Unit) {
@@ -481,19 +501,26 @@ class HomeScreen : Screen {
                         }
                     }
                 }
-                MemberPreviewList(
-                    members = homeScreenModel.state.spaceMembers,
-                    maxCount = 6,
-                    currentUserId = homeScreenModel.state.currentUserId,
-                    memberProfiles = homeScreenModel.state.memberProfiles,
-                    onViewAll = {
-                        homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
-                            navigator?.push(MembersScreen(spaceId = it))
-                        }
+                AnimatedVisibility(
+                    visible = shouldShowMemberSection,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Column {
+                        MemberPreviewList(
+                            members = homeScreenModel.state.spaceMembers,
+                            maxCount = 6,
+                            currentUserId = homeScreenModel.state.currentUserId,
+                            memberProfiles = homeScreenModel.state.memberProfiles,
+                            onViewAll = {
+                                homeScreenModel.state.space.id.takeIf { it.isNotBlank() }?.let {
+                                    navigator?.push(MembersScreen(spaceId = it))
+                                }
+                            }
+                        )
+                        Spacer(Modifier.height(16.dp))
                     }
-                )
-
-                Spacer(Modifier.height(16.dp))
+                }
 
                 AnimatedVisibility(homeScreenModel.state.expenses.isNotEmpty()) {
                     val pullRefreshState = rememberPullToRefreshState()
@@ -502,12 +529,14 @@ class HomeScreen : Screen {
                         isRefreshing = homeScreenModel.state.isPullRefreshing,
                         onRefresh = homeScreenModel::refreshExpenses
                     ) {
-                        LazyColumn {
+                        LazyColumn(state = expenseListState) {
                             val memberNameMap =
                                 homeScreenModel.state.spaceMembers.associate { member ->
                                     member.userId to (member.displayName?.takeIf { it.isNotBlank() }
                                             ?: member.userId.take(6))
                                 }
+                            val allMemberIds = homeScreenModel.state.spaceMembers.map { it.userId }.toSet()
+                            val participantIdsByExpense = homeScreenModel.state.expenseParticipantIds
 
                             item {
                                 Text("账单记录", style = MaterialTheme.typography.titleMedium)
@@ -515,9 +544,19 @@ class HomeScreen : Screen {
                             }
 
                             items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
+                                val participantDisplay = buildParticipantSummary(
+                                    participantIds = participantIdsByExpense[expense.id].orEmpty(),
+                                    allMemberIds = allMemberIds,
+                                    memberNameMap = memberNameMap
+                                )
+                                val createdByDisplayName = expense.createdBy
+                                    ?.let { uid -> memberNameMap[uid] ?: uid.take(6) }
+
                                 ExpenseItemCard(
                                     expense = expense,
-                                    payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员"
+                                    payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员",
+                                    participantSummary = participantDisplay,
+                                    createdByDisplayName = createdByDisplayName
                                 )
                             }
                         }
@@ -532,7 +571,9 @@ class HomeScreen : Screen {
 @Composable
 private fun ExpenseItemCard(
     expense: Expense,
-    payerDisplayName: String
+    payerDisplayName: String,
+    participantSummary: String,
+    createdByDisplayName: String?
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -573,23 +614,63 @@ private fun ExpenseItemCard(
                 )
             }
 
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = " $payerDisplayName",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                MetaChip(label = "付款：$payerDisplayName")
+                createdByDisplayName?.takeIf { it.isNotBlank() }?.let {
+                    MetaChip(label = "创建：$it")
+                }
             }
+
+            Text(
+                text = "参与：$participantSummary",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
+    }
+}
+
+@Composable
+private fun MetaChip(label: String) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun buildParticipantSummary(
+    participantIds: List<String>,
+    allMemberIds: Set<String>,
+    memberNameMap: Map<String, String>
+): String {
+    val ids = participantIds.distinct()
+    if (ids.isEmpty()) return "全员参与"
+    if (allMemberIds.isNotEmpty() && ids.toSet() == allMemberIds) return "全员参与"
+    return ids.joinToString("、") { uid ->
+        memberNameMap[uid] ?: uid.take(6)
     }
 }
 
 private fun formatExpenseTime(raw: String?): String {
     if (raw.isNullOrBlank()) return ""
+    runCatching {
+        val chinaDateTime = Instant.parse(raw).toLocalDateTime(CHINA_TIME_ZONE)
+        return "${chinaDateTime.month.number.pad2()}-${chinaDateTime.day.pad2()} " +
+            "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
+    }
+
     val noZone = raw
         .replace('T', ' ')
         .substringBefore('+')
@@ -600,6 +681,9 @@ private fun formatExpenseTime(raw: String?): String {
     }
 }
 
+private fun Int.pad2(): String = toString().padStart(2, '0')
+private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
+
 @Composable
 fun MemberPreviewList(
     members: List<SpaceMember>,
@@ -609,22 +693,22 @@ fun MemberPreviewList(
     onViewAll: () -> Unit
 ) {
     val preview = members.take(maxCount)
-    AnimatedVisibility(preview.isNotEmpty()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("成员", style = MaterialTheme.typography.titleMedium)
-            if (members.size > maxCount) {
-                TextButton(onClick = onViewAll) {
-                    Text("查看全部")
-                }
+    if (preview.isEmpty()) return
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("成员（${members.size}）", style = MaterialTheme.typography.titleMedium)
+        if (members.size > maxCount) {
+            TextButton(onClick = onViewAll) {
+                Text("查看全部")
             }
         }
     }
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(preview, key = { it.userId }) { user ->

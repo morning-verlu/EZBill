@@ -13,13 +13,30 @@ import org.kukro.ezbill.models.CreateExpenseData
 import org.kukro.ezbill.models.Expense
 
 class EditExpenseScreenModel(
-    val spaceId: String, val userId: String
+    val spaceId: String,
+    val userId: String,
+    memberUserIds: List<String>
 ) : ScreenModel {
+    companion object {
+        private const val MAX_EXPENSE_AMOUNT = 999999.99
+        private const val MAX_EXPENSE_AMOUNT_LABEL = "999999.99"
+        private val AMOUNT_INPUT_REGEX = Regex("^\\d{0,6}(\\.\\d{0,2})?$")
+    }
+
     var state by mutableStateOf<EditExpenseUIState>(EditExpenseUIState.Idle)
         private set
 
     var expenseAmountText by mutableStateOf("")
+    var amountInputError by mutableStateOf<String?>(null)
+        private set
     var selectedPayerId: String? by mutableStateOf(userId)
+    var selectedParticipantIds by mutableStateOf(
+        memberUserIds
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toSet()
+    )
     var createdId by mutableStateOf("")
     private var job: Job? = null
 
@@ -37,16 +54,42 @@ class EditExpenseScreenModel(
     fun onSelectPayerId(id: String) {
         selectedPayerId = id
         expenseData = expenseData.copy(
-            payerId = id, createdBy = id
+            payerId = id,
+            createdBy = userId
         )
     }
 
-    fun onAmountChange(value: String) {
-        expenseAmountText = value
-        val parsed = value.toDoubleOrNull()
-        if (parsed != null) {
-            expenseData = expenseData.copy(amount = parsed)
+    fun onToggleParticipant(userId: String) {
+        selectedParticipantIds = if (selectedParticipantIds.contains(userId)) {
+            selectedParticipantIds - userId
+        } else {
+            selectedParticipantIds + userId
         }
+    }
+
+    fun onAmountChange(value: String) {
+        val normalized = value.trim()
+        if (normalized.isEmpty()) {
+            expenseAmountText = ""
+            amountInputError = null
+            expenseData = expenseData.copy(amount = 0.0)
+            return
+        }
+
+        if (!AMOUNT_INPUT_REGEX.matches(normalized)) {
+            amountInputError = "金额格式不正确（最多 6 位整数 + 2 位小数）"
+            return
+        }
+
+        val parsed = normalized.toDoubleOrNull()
+        if (parsed != null && parsed > MAX_EXPENSE_AMOUNT) {
+            amountInputError = "金额不能超过 ¥$MAX_EXPENSE_AMOUNT_LABEL"
+            return
+        }
+
+        expenseAmountText = normalized
+        amountInputError = null
+        expenseData = expenseData.copy(amount = parsed ?: 0.0)
     }
 
     fun onNoteChange(value: String) {
@@ -58,10 +101,11 @@ class EditExpenseScreenModel(
         job?.cancel()
     }
 
-    suspend fun createExpense(
-        expenseData: CreateExpenseData
-    ): Expense {
-        return SupabaseService.createExpense(expenseData)
+    suspend fun createExpense(expenseData: CreateExpenseData): Expense {
+        return SupabaseService.createExpense(
+            expenseData = expenseData,
+            participantUserIds = selectedParticipantIds.toList()
+        )
     }
 
     fun submit(onDone: () -> Unit) {
@@ -70,8 +114,20 @@ class EditExpenseScreenModel(
         job?.cancel()
         job = screenModelScope.launch {
             val amountValue = expenseData.amount
+            if (!amountInputError.isNullOrBlank()) {
+                state = EditExpenseUIState.Error(amountInputError ?: "金额不合法")
+                return@launch
+            }
             if (amountValue <= 0) {
                 state = EditExpenseUIState.Error("金额不合法")
+                return@launch
+            }
+            if (amountValue > MAX_EXPENSE_AMOUNT) {
+                state = EditExpenseUIState.Error("金额不能超过 ¥$MAX_EXPENSE_AMOUNT_LABEL")
+                return@launch
+            }
+            if (selectedParticipantIds.isEmpty()) {
+                state = EditExpenseUIState.Error("请至少选择一位参与成员")
                 return@launch
             }
 

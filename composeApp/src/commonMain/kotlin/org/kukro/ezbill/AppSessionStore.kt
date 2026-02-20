@@ -142,12 +142,14 @@ object AppSessionStore {
         try {
             val members = loadMembers(space.id)
             val expenses = loadExpenses(space.id)
+            val expenseParticipantIds = loadExpenseParticipantIds(expenses)
             val memberProfiles = loadProfilesForMembers(members, _state.value.profile)
             _state.value = _state.value.copy(
                 status = AppSessionStatus.Ready,
                 memberProfiles = memberProfiles,
                 members = members,
-                expenses = expenses
+                expenses = expenses,
+                expenseParticipantIds = expenseParticipantIds
             )
             saveSelectedSpaceId(space.id)
             subscribeForSpace(space.id)
@@ -319,6 +321,7 @@ object AppSessionStore {
                     loadExpenses(sid)
                 }.orEmpty()
                 println("AppSessionStore.bootstrap step=expenses done count=${expenses.size}")
+                val expenseParticipantIds = loadExpenseParticipantIds(expenses)
 
                 println("AppSessionStore.bootstrap step=memberProfiles start")
                 val memberProfiles = loadProfilesForMembers(members, profile)
@@ -334,7 +337,8 @@ object AppSessionStore {
                     spaces = spacesWithFallback,
                     selectedSpace = selected,
                     members = members,
-                    expenses = expenses
+                    expenses = expenses,
+                    expenseParticipantIds = expenseParticipantIds
                 )
                 println("AppSessionStore.bootstrap done status=Ready")
                 if (isSigningOut) return@withLock
@@ -390,6 +394,20 @@ object AppSessionStore {
         return result.decodeList()
     }
 
+    private suspend fun loadExpenseParticipantIds(expenses: List<Expense>): Map<String, List<String>> {
+        if (expenses.isEmpty()) return emptyMap()
+        return loadExpenseParticipantIdsByExpenseIds(expenses.map { it.id })
+    }
+
+    private suspend fun loadExpenseParticipantIdsByExpenseIds(expenseIds: List<String>): Map<String, List<String>> {
+        if (expenseIds.isEmpty()) return emptyMap()
+        return SupabaseService.fetchExpenseSharesByExpenseIds(expenseIds)
+            .groupBy { it.expenseId }
+            .mapValues { (_, rows) ->
+                rows.map { it.userId }.distinct()
+            }
+    }
+
     private fun selectSpace(
         spaces: List<Space>,
         selectedSpaceId: String?,
@@ -435,7 +453,15 @@ object AppSessionStore {
                     val current = _state.value
                     if (current.selectedSpace?.id != spaceId) return@collect
                     if (current.expenses.any { it.id == item.id }) return@collect
-                    _state.value = current.copy(expenses = listOf(item) + current.expenses)
+                    val participantIds = runCatching {
+                        loadExpenseParticipantIdsByExpenseIds(listOf(item.id))[item.id].orEmpty()
+                    }.getOrElse {
+                        emptyList()
+                    }
+                    _state.value = current.copy(
+                        expenses = listOf(item) + current.expenses,
+                        expenseParticipantIds = current.expenseParticipantIds + (item.id to participantIds)
+                    )
                 }
         }
         safeLaunch("expenses.subscribe spaceId=$spaceId") {
@@ -516,11 +542,13 @@ object AppSessionStore {
         try {
             val members = loadMembers(selectedSpaceId)
             val expenses = loadExpenses(selectedSpaceId)
+            val expenseParticipantIds = loadExpenseParticipantIds(expenses)
             val memberProfiles = loadProfilesForMembers(members, current.profile)
             _state.value = _state.value.copy(
                 status = AppSessionStatus.Ready,
                 members = members,
                 expenses = expenses,
+                expenseParticipantIds = expenseParticipantIds,
                 memberProfiles = memberProfiles
             )
         } catch (e: Exception) {

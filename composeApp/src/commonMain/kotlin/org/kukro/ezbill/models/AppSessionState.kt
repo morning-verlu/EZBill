@@ -18,5 +18,6 @@ data class AppSessionState(
     val spaces: List<Space> = emptyList(),
     val selectedSpace: Space? = null,
     val members: List<SpaceMember> = emptyList(),
-    val expenses: List<Expense> = emptyList()
+    val expenses: List<Expense> = emptyList(),
+    val expenseParticipantIds: Map<String, List<String>> = emptyMap()
 )

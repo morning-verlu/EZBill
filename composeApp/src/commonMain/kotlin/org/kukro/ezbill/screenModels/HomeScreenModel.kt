@@ -49,6 +49,7 @@ class HomeScreenModel : ScreenModel {
                     memberProfiles = appState.memberProfiles,
                     spaceMembers = appState.members,
                     expenses = appState.expenses,
+                    expenseParticipantIds = appState.expenseParticipantIds,
                     isDataLoading = isSessionBootstrapping
                 )
                 println(
@@ -245,6 +246,7 @@ data class HomeState(
     val space: Space = Space(id = "", code = ""),
     val spaceList: List<Space> = emptyList(),
     val expenses: List<Expense> = emptyList(),
+    val expenseParticipantIds: Map<String, List<String>> = emptyMap(),
     val expandedFabButtons: Boolean = false,
     val memberProfiles: Map<String, Profile> = emptyMap(),
     val spaceMembers: List<SpaceMember> = emptyList(),
