@@ -72,7 +72,7 @@ fun App() {
                     }
 
                     else -> {
-                        RootRoute.AUTH_CHOICE
+                        RootRoute.LOADING
                     }
                 }
                 val shouldKeepLoading =
