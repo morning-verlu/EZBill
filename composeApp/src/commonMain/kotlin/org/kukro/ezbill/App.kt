@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -16,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +47,9 @@ fun App() {
         val hostState = remember { SnackbarHostState() }
         val homeScreen = remember { HomeScreen() }
         val authChoiceScreen = remember { AuthChoiceScreen() }
-        var startupAnimationFinished by rememberSaveable { mutableStateOf(false) }
+        // Process-lifetime flag: process recreation should replay startup animation.
+        var startupAnimationFinished by remember { mutableStateOf(false) }
+        var lastStableRoute by remember { mutableStateOf<RootRoute?>(null) }
         LaunchedEffect(Unit) {
             AppSessionStore.start()
         }
@@ -75,9 +77,17 @@ fun App() {
                         RootRoute.LOADING
                     }
                 }
-                val shouldKeepLoading =
-                    !startupAnimationFinished || sessionRoute == RootRoute.LOADING
-                val rootRoute = if (shouldKeepLoading) RootRoute.LOADING else sessionRoute
+                LaunchedEffect(sessionRoute) {
+                    if (sessionRoute != RootRoute.LOADING) {
+                        lastStableRoute = sessionRoute
+                    }
+                }
+                val rootRoute = when {
+                    !startupAnimationFinished -> RootRoute.LOADING
+                    sessionRoute != RootRoute.LOADING -> sessionRoute
+                    lastStableRoute != null -> lastStableRoute!!
+                    else -> RootRoute.LOADING
+                }
                 val rootScreen = when (rootRoute) {
                     RootRoute.LOADING -> null
                     RootRoute.HOME -> homeScreen
@@ -110,6 +120,16 @@ private fun RootLoadingScreen(
     playAnimation: Boolean,
     onAnimationFinished: () -> Unit
 ) {
+    if (!playAnimation) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     val animationSpeed = 2.0f
 
     val composition by rememberLottieComposition {

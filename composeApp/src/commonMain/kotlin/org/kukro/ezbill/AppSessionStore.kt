@@ -53,6 +53,7 @@ object AppSessionStore {
     private var started = false
     private var sessionJob: Job? = null
     private val bootstrapMutex = Mutex()
+    private val foregroundRecoverMutex = Mutex()
     private var isBootstrapping = false
     private var isSigningOut = false
 
@@ -125,7 +126,9 @@ object AppSessionStore {
 
         foregroundRecoverJob?.cancel()
         foregroundRecoverJob = safeLaunch("foregroundRecover") {
-            recoverAfterForeground()
+            foregroundRecoverMutex.withLock {
+                recoverAfterForeground()
+            }
         }
     }
 
@@ -520,6 +523,7 @@ object AppSessionStore {
     }
 
     private suspend fun recoverAfterForeground() {
+        if (isSigningOut || isBootstrapping) return
         val authUserId = supabase.auth.currentUserOrNull()?.id ?: return
         val current = _state.value
         val selectedSpace = current.selectedSpace

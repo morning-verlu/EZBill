@@ -35,11 +35,16 @@ class HomeScreenModel : ScreenModel {
         screenModelScope.launch {
             try {
                 AppSessionStore.state.collect { appState ->
-                val isSessionBootstrapping = when (appState.status) {
-                    is AppSessionStatus.Initializing -> true
-                    is AppSessionStatus.Loading -> appState.currentUserId != null && appState.profile == null
-                    else -> false
-                }
+                val hasRenderableData =
+                    appState.profile != null ||
+                            appState.selectedSpace != null ||
+                            appState.members.isNotEmpty() ||
+                            appState.expenses.isNotEmpty()
+                val isSessionBootstrapping =
+                    (appState.status is AppSessionStatus.Initializing ||
+                            appState.status is AppSessionStatus.Loading) &&
+                            appState.currentUserId != null &&
+                            !hasRenderableData
                 state = state.copy(
                     currentUserId = appState.currentUserId,
                     isAnonymousUser = appState.isAnonymousUser,
