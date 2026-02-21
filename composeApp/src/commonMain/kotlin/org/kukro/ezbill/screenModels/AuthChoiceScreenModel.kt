@@ -9,27 +9,38 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.SessionUseCases
 
-class AuthChoiceScreenModel : ScreenModel {
-    var loading by mutableStateOf(false)
+class AuthChoiceScreenModel(
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
+) : ScreenModel {
+    var state by mutableStateOf(AuthChoiceState())
         private set
+    val loading: Boolean
+        get() = state.loading
 
     private val _snackBar = MutableSharedFlow<String>()
     val snackBar = _snackBar.asSharedFlow()
 
+    fun onIntent(intent: AuthChoiceIntent) {
+        when (intent) {
+            AuthChoiceIntent.ChooseAnonymous -> chooseAnonymous()
+        }
+    }
+
     fun chooseAnonymous() {
         if (loading) return
         screenModelScope.launch {
-            loading = true
+            state = state.copy(loading = true)
             try {
-                AppSessionStore.chooseAnonymous()
+                sessionUseCases.chooseAnonymous()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 emitSnackBar("匿名登录失败: ${e.message ?: "unknown error"}")
             } finally {
-                loading = false
+                state = state.copy(loading = false)
             }
         }
     }
@@ -39,3 +50,10 @@ class AuthChoiceScreenModel : ScreenModel {
     }
 }
 
+sealed interface AuthChoiceIntent {
+    data object ChooseAnonymous : AuthChoiceIntent
+}
+
+data class AuthChoiceState(
+    val loading: Boolean = false
+)

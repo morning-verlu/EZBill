@@ -9,14 +9,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.SessionUseCases
 import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.Space
 import org.kukro.ezbill.models.SpaceMember
 
-class HomeScreenModel : ScreenModel {
+class HomeScreenModel(
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
+) : ScreenModel {
     var state by mutableStateOf(HomeState())
         private set
 
@@ -27,14 +30,14 @@ class HomeScreenModel : ScreenModel {
         private set
 
     init {
-        AppSessionStore.start()
+        sessionUseCases.start()
         observeSessionState()
     }
 
     private fun observeSessionState() {
         screenModelScope.launch {
             try {
-                AppSessionStore.state.collect { appState ->
+                sessionUseCases.sessionState.collect { appState ->
                 val hasRenderableData =
                     appState.profile != null ||
                             appState.selectedSpace != null ||
@@ -81,6 +84,21 @@ class HomeScreenModel : ScreenModel {
         _snackBar.emit(msg)
     }
 
+    fun onIntent(intent: HomeIntent) {
+        when (intent) {
+            is HomeIntent.ToggleSpace -> handleToggleSpace(intent.space)
+            HomeIntent.RefreshCurrentSpace -> handleRefreshCurrentSpace()
+            is HomeIntent.SubmitNewSpace -> handleSubmitNewSpace(
+                newSpaceName = intent.newSpaceName,
+                displayName = intent.displayName
+            )
+            is HomeIntent.SubmitJoinSpace -> handleSubmitJoinSpace(
+                code = intent.code,
+                displayName = intent.displayName
+            )
+        }
+    }
+
     fun onMenuExpanded(expanded: Boolean) {
         state = state.copy(menuExpanded = expanded)
     }
@@ -90,18 +108,7 @@ class HomeScreenModel : ScreenModel {
     }
 
     fun onToggleSpace(space: Space) {
-        state = state.copy(space = space)
-        if (space.id.isBlank()) return
-        screenModelScope.launch {
-            setLoading()
-            try {
-                AppSessionStore.switchSpace(space)
-            } catch (e: Exception) {
-                setError(e.message.toString())
-            } finally {
-                setIdle()
-            }
-        }
+        onIntent(HomeIntent.ToggleSpace(space))
     }
 
     fun onShowCreateDialog(show: Boolean) {
@@ -139,22 +146,7 @@ class HomeScreenModel : ScreenModel {
     }
 
     fun refreshExpenses() {
-        val currentSpace = state.space
-        if (currentSpace.id.isBlank()) return
-        if (state.isPullRefreshing) return
-
-        screenModelScope.launch {
-            state = state.copy(isPullRefreshing = true)
-            try {
-                AppSessionStore.switchSpace(currentSpace)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                setError(e.message.toString())
-            } finally {
-                state = state.copy(isPullRefreshing = false)
-            }
-        }
+        onIntent(HomeIntent.RefreshCurrentSpace)
     }
 
     private fun setLoading() {
@@ -175,11 +167,23 @@ class HomeScreenModel : ScreenModel {
         newSpaceName: String = state.newSpaceName,
         displayName: String = state.displayName
     ) {
+        onIntent(
+            HomeIntent.SubmitNewSpace(
+                newSpaceName = newSpaceName,
+                displayName = displayName
+            )
+        )
+    }
+
+    private fun handleSubmitNewSpace(
+        newSpaceName: String,
+        displayName: String
+    ) {
         screenModelScope.launch {
             setLoading()
             try {
                 val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
-                AppSessionStore.createSpace(newSpaceName, finalDisplayName)
+                sessionUseCases.createSpace(newSpaceName, finalDisplayName)
                 emitSnackBar("创建成功")
             } catch (e: CancellationException) {
                 throw e
@@ -195,6 +199,18 @@ class HomeScreenModel : ScreenModel {
         code: String = state.joinSpaceCode,
         displayName: String = state.displayName
     ) {
+        onIntent(
+            HomeIntent.SubmitJoinSpace(
+                code = code,
+                displayName = displayName
+            )
+        )
+    }
+
+    private fun handleSubmitJoinSpace(
+        code: String,
+        displayName: String
+    ) {
         screenModelScope.launch {
             setLoading()
             try {
@@ -203,7 +219,7 @@ class HomeScreenModel : ScreenModel {
                     return@launch
                 }
                 val finalDisplayName = displayName.trim().ifBlank { state.profile.username }
-                AppSessionStore.joinSpace(code, finalDisplayName)
+                sessionUseCases.joinSpace(code, finalDisplayName)
                 emitSnackBar("加入成功")
             } catch (e: CancellationException) {
                 throw e
@@ -215,8 +231,43 @@ class HomeScreenModel : ScreenModel {
         }
     }
 
+    private fun handleToggleSpace(space: Space) {
+        state = state.copy(space = space)
+        if (space.id.isBlank()) return
+        screenModelScope.launch {
+            setLoading()
+            try {
+                sessionUseCases.switchSpace(space)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError(e.message.toString())
+            } finally {
+                setIdle()
+            }
+        }
+    }
+
+    private fun handleRefreshCurrentSpace() {
+        val currentSpace = state.space
+        if (currentSpace.id.isBlank()) return
+        if (state.isPullRefreshing) return
+        screenModelScope.launch {
+            state = state.copy(isPullRefreshing = true)
+            try {
+                sessionUseCases.refreshCurrentSpace()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setError(e.message.toString())
+            } finally {
+                state = state.copy(isPullRefreshing = false)
+            }
+        }
+    }
+
     suspend fun updateUsernameOnly(username: String): Profile {
-        AppSessionStore.updateUsernameOnly(username)
+        sessionUseCases.updateUsernameOnly(username)
         return state.profile
     }
 
@@ -224,7 +275,7 @@ class HomeScreenModel : ScreenModel {
         username: String,
         imageBytes: ByteArray
     ): Profile {
-        AppSessionStore.updateProfileWithNewAvatar(username, imageBytes)
+        sessionUseCases.updateProfileWithNewAvatar(username, imageBytes)
         return state.profile
     }
 }
@@ -235,6 +286,19 @@ private fun statusName(status: AppSessionStatus): String = when (status) {
     is AppSessionStatus.Ready -> "Ready"
     is AppSessionStatus.Unauthenticated -> "Unauthenticated"
     is AppSessionStatus.Error -> "Error(${status.message})"
+}
+
+sealed interface HomeIntent {
+    data class ToggleSpace(val space: Space) : HomeIntent
+    data object RefreshCurrentSpace : HomeIntent
+    data class SubmitNewSpace(
+        val newSpaceName: String,
+        val displayName: String
+    ) : HomeIntent
+    data class SubmitJoinSpace(
+        val code: String,
+        val displayName: String
+    ) : HomeIntent
 }
 
 data class HomeState(

@@ -15,9 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,16 +28,12 @@ import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.ExperimentalResourceApi
-import org.kukro.ezbill.models.AppSessionStatus
+import org.kukro.ezbill.app.AppRootIntent
+import org.kukro.ezbill.app.RootDestination
+import org.kukro.ezbill.di.AppGraph
 import org.kukro.ezbill.screens.AuthChoiceScreen
 import org.kukro.ezbill.screens.HomeScreen
 import org.kukro.ezbill.ui.theme.EzBillTheme
-
-private enum class RootRoute {
-    LOADING,
-    HOME,
-    AUTH_CHOICE
-}
 
 @Composable
 fun App() {
@@ -47,60 +41,32 @@ fun App() {
         val hostState = remember { SnackbarHostState() }
         val homeScreen = remember { HomeScreen() }
         val authChoiceScreen = remember { AuthChoiceScreen() }
-        // Process-lifetime flag: process recreation should replay startup animation.
-        var startupAnimationFinished by remember { mutableStateOf(false) }
-        var lastStableRoute by remember { mutableStateOf<RootRoute?>(null) }
+        val rootStateMachine = remember { AppGraph.rootStateMachine }
+        val rootState by rootStateMachine.state.collectAsState()
+
         LaunchedEffect(Unit) {
-            AppSessionStore.start()
+            rootStateMachine.dispatch(AppRootIntent.Start)
         }
-        val appState by AppSessionStore.state.collectAsState()
 
         CompositionLocalProvider(LocalSnackBarHostState provides hostState) {
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState) }
             ) { innerPadding ->
-                val sessionRoute = when {
-                    appState.status is AppSessionStatus.Unauthenticated -> {
-                        RootRoute.AUTH_CHOICE
-                    }
-
-                    appState.currentUserId != null -> {
-                        RootRoute.HOME
-                    }
-
-                    appState.status is AppSessionStatus.Initializing ||
-                            appState.status is AppSessionStatus.Loading -> {
-                        RootRoute.LOADING
-                    }
-
-                    else -> {
-                        RootRoute.LOADING
-                    }
+                val rootScreen = when (rootState.destination) {
+                    RootDestination.LOADING -> null
+                    RootDestination.HOME -> homeScreen
+                    RootDestination.AUTH_CHOICE -> authChoiceScreen
                 }
-                LaunchedEffect(sessionRoute) {
-                    if (sessionRoute != RootRoute.LOADING) {
-                        lastStableRoute = sessionRoute
-                    }
-                }
-                val rootRoute = when {
-                    !startupAnimationFinished -> RootRoute.LOADING
-                    sessionRoute != RootRoute.LOADING -> sessionRoute
-                    lastStableRoute != null -> lastStableRoute!!
-                    else -> RootRoute.LOADING
-                }
-                val rootScreen = when (rootRoute) {
-                    RootRoute.LOADING -> null
-                    RootRoute.HOME -> homeScreen
-                    RootRoute.AUTH_CHOICE -> authChoiceScreen
-                }
-                key(rootRoute) {
+                key(rootState.destination) {
                     if (rootScreen == null) {
                         RootLoadingScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(innerPadding),
-                            playAnimation = !startupAnimationFinished,
-                            onAnimationFinished = { startupAnimationFinished = true }
+                            playAnimation = rootState.playStartupAnimation,
+                            onAnimationFinished = {
+                                rootStateMachine.dispatch(AppRootIntent.StartupAnimationFinished)
+                            }
                         )
                     } else {
                         Navigator(rootScreen) {

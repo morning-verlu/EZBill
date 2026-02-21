@@ -11,9 +11,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.SessionUseCases
 
-class EmailAuthScreenModel : ScreenModel {
+class EmailAuthScreenModel(
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
+) : ScreenModel {
     var state by mutableStateOf(EmailAuthState())
         private set
 
@@ -30,21 +33,29 @@ class EmailAuthScreenModel : ScreenModel {
         state = state.copy(password = value)
     }
 
+    fun onIntent(intent: EmailAuthIntent) {
+        when (intent) {
+            EmailAuthIntent.SignIn -> signIn()
+            EmailAuthIntent.SignUp -> signUp()
+            EmailAuthIntent.ChooseAnonymous -> chooseAnonymous()
+        }
+    }
+
     fun signIn() {
         submitWithEmailCredentials { email, password ->
-            AppSessionStore.signInWithEmail(email, password)
+            sessionUseCases.signInWithEmail(email, password)
         }
     }
 
     fun signUp() {
         submitWithEmailCredentials { email, password ->
-            AppSessionStore.signUpWithEmail(email, password)
+            sessionUseCases.signUpWithEmail(email, password)
         }
     }
 
     fun chooseAnonymous() {
         submitAction {
-            AppSessionStore.chooseAnonymous()
+            sessionUseCases.chooseAnonymous()
         }
     }
 
@@ -107,3 +118,8 @@ data class EmailAuthState(
     val loading: Boolean = false
 )
 
+sealed interface EmailAuthIntent {
+    data object SignIn : EmailAuthIntent
+    data object SignUp : EmailAuthIntent
+    data object ChooseAnonymous : EmailAuthIntent
+}

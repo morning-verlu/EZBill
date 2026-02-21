@@ -32,8 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +43,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlin.math.abs
 import kotlin.math.round
-import org.kukro.ezbill.AppSessionStore
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.SettlementPreview
@@ -68,8 +65,6 @@ class SettlementScreen(
         val screenModel = rememberScreenModel {
             SettlementScreenModel(spaceId = spaceId, members = members)
         }
-        val appState by AppSessionStore.state.collectAsState()
-        val currentUserId = appState.currentUserId
 
         LaunchedEffect(Unit) {
             screenModel.recalculate()
@@ -127,7 +122,7 @@ class SettlementScreen(
                             .padding(padding)
                             .padding(16.dp),
                         preview = ui.preview,
-                        currentUserId = currentUserId,
+                        currentUserId = screenModel.currentUserId,
                         note = screenModel.note,
                         isSaving = screenModel.isSaving,
                         onNoteChange = screenModel::onNoteChange,

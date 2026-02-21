@@ -11,12 +11,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.AppSessionStore
-import org.kukro.ezbill.SupabaseService
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.AccountUseCases
+import org.kukro.ezbill.domain.usecase.SessionUseCases
 import org.kukro.ezbill.models.AppSessionStatus
 import org.kukro.ezbill.models.Profile
 
-class UserDetailScreenModel : ScreenModel {
+class UserDetailScreenModel(
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases,
+    private val accountUseCases: AccountUseCases = AppGraph.accountUseCases
+) : ScreenModel {
     var state by mutableStateOf(UserDetailState())
         private set
 
@@ -25,13 +29,13 @@ class UserDetailScreenModel : ScreenModel {
     private val maxAvatarBytes = 5 * 1024 * 1024
 
     init {
-        AppSessionStore.start()
+        sessionUseCases.start()
         observeSessionState()
     }
 
     private fun observeSessionState() {
         screenModelScope.launch {
-            AppSessionStore.state.collect { appState ->
+            sessionUseCases.sessionState.collect { appState ->
                 state = state.copy(
                     currentUserId = appState.currentUserId,
                     currentUserEmail = appState.currentUserEmail,
@@ -125,8 +129,7 @@ class UserDetailScreenModel : ScreenModel {
             onShowTopLoading(true)
             emitSnackBar("开始升级账户...")
             try {
-                SupabaseService.updateUser(uEmail, uPassword)
-                AppSessionStore.bootstrapAuthenticated()
+                accountUseCases.upgradeAccount(uEmail, uPassword)
                 emitSnackBar("升级成功，请检查邮箱完成验证")
             } catch (e: AuthRestException) {
                 val msg = when (e.errorCode) {
@@ -165,7 +168,7 @@ class UserDetailScreenModel : ScreenModel {
         screenModelScope.launch {
             onShowTopLoading(true)
             try {
-                AppSessionStore.signOut()
+                sessionUseCases.signOut()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -233,7 +236,7 @@ class UserDetailScreenModel : ScreenModel {
             state = state.copy(isAvatarUploading = true)
             emitSnackBar("开始上传头像...")
             try {
-                AppSessionStore.updateAvatarOnly(imageBytes)
+                sessionUseCases.updateAvatarOnly(imageBytes)
                 emitSnackBar("头像更新成功")
             } catch (e: CancellationException) {
                 throw e

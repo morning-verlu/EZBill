@@ -5,8 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.SupabaseService
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.ExpenseUseCases
+import org.kukro.ezbill.domain.usecase.SessionUseCases
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.ExpenseShareRow
 import org.kukro.ezbill.models.SettlementTransferInput
@@ -15,10 +18,15 @@ import kotlin.math.round
 
 class SettlementScreenModel(
     private val spaceId: String,
-    private val members: List<SpaceMember>
+    private val members: List<SpaceMember>,
+    private val expenseUseCases: ExpenseUseCases = AppGraph.expenseUseCases,
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
 ) : ScreenModel {
 
     var uiState by mutableStateOf<SettlementUiState>(SettlementUiState.Loading)
+        private set
+
+    var currentUserId by mutableStateOf<String?>(null)
         private set
 
     var note by mutableStateOf("")
@@ -26,6 +34,15 @@ class SettlementScreenModel(
 
     var isSaving by mutableStateOf(false)
         private set
+
+    init {
+        sessionUseCases.start()
+        screenModelScope.launch {
+            sessionUseCases.sessionState.collect { appState ->
+                currentUserId = appState.currentUserId
+            }
+        }
+    }
 
     fun onNoteChange(value: String) {
         note = value
@@ -35,10 +52,12 @@ class SettlementScreenModel(
         screenModelScope.launch {
             uiState = SettlementUiState.Loading
             try {
-                val expenses = SupabaseService.fetchExpensesBySpace(spaceId)
-                val shares = SupabaseService.fetchExpenseSharesByExpenseIds(expenses.map { it.id })
+                val expenses = expenseUseCases.fetchExpensesBySpace(spaceId)
+                val shares = expenseUseCases.fetchExpenseSharesByExpenseIds(expenses.map { it.id })
                 val preview = buildPreview(members, expenses, shares)
                 uiState = SettlementUiState.Success(preview)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 uiState = SettlementUiState.Error(e.message ?: "结算计算失败")
             }
@@ -65,7 +84,7 @@ class SettlementScreenModel(
                         amount = it.amount
                     )
                 }
-                SupabaseService.saveSettlement(
+                expenseUseCases.saveSettlement(
                     spaceId = spaceId,
                     note = note.ifBlank { null },
                     transfers = transferInputs
@@ -73,6 +92,8 @@ class SettlementScreenModel(
 
                 uiState = SettlementUiState.Success(success.preview, "结算保存成功")
                 onDone()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 uiState = SettlementUiState.Error(e.message ?: "保存结算失败")
             } finally {

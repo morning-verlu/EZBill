@@ -8,14 +8,16 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import org.kukro.ezbill.SupabaseService
+import org.kukro.ezbill.di.AppGraph
+import org.kukro.ezbill.domain.usecase.ExpenseUseCases
 import org.kukro.ezbill.models.CreateExpenseData
 import org.kukro.ezbill.models.Expense
 
 class EditExpenseScreenModel(
     val spaceId: String,
     val userId: String,
-    memberUserIds: List<String>
+    memberUserIds: List<String>,
+    private val expenseUseCases: ExpenseUseCases = AppGraph.expenseUseCases
 ) : ScreenModel {
     companion object {
         private const val MAX_EXPENSE_AMOUNT = 999999.99
@@ -102,7 +104,7 @@ class EditExpenseScreenModel(
     }
 
     suspend fun createExpense(expenseData: CreateExpenseData): Expense {
-        return SupabaseService.createExpense(
+        return expenseUseCases.createExpense(
             expenseData = expenseData,
             participantUserIds = selectedParticipantIds.toList()
         )
