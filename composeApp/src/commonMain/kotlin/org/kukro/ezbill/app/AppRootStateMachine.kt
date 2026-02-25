@@ -40,6 +40,7 @@ class AppRootStateMachine(
     private var observeJob: Job? = null
     private var startupAnimationFinished = false
     private var latestSessionDestination = RootDestination.LOADING
+    private var sessionStatusReady = false
     private var lastStableDestination: RootDestination? = null
 
     fun dispatch(intent: AppRootIntent) {
@@ -67,6 +68,7 @@ class AppRootStateMachine(
         observeJob?.cancel()
         observeJob = scope.launch {
             sessionUseCases.sessionState.collect { appState ->
+                sessionStatusReady = appState.status is AppSessionStatus.Ready
                 latestSessionDestination = when {
                     appState.status is AppSessionStatus.Unauthenticated -> RootDestination.AUTH_CHOICE
                     appState.currentUserId != null -> RootDestination.HOME
@@ -74,8 +76,12 @@ class AppRootStateMachine(
                             appState.status is AppSessionStatus.Loading -> RootDestination.LOADING
                     else -> RootDestination.LOADING
                 }
-                if (latestSessionDestination != RootDestination.LOADING) {
-                    lastStableDestination = latestSessionDestination
+                if (latestSessionDestination == RootDestination.AUTH_CHOICE) {
+                    lastStableDestination = RootDestination.AUTH_CHOICE
+                } else if (latestSessionDestination == RootDestination.HOME &&
+                    (sessionStatusReady || startupAnimationFinished)
+                ) {
+                    lastStableDestination = RootDestination.HOME
                 }
                 updateState()
             }
@@ -83,9 +89,11 @@ class AppRootStateMachine(
     }
 
     private fun updateState() {
+        // HOME only when (Lottie finished OR data Ready). Never enter HOME when both Lottie not done and data not loaded.
         val destination = when {
-            !startupAnimationFinished -> RootDestination.LOADING
-            latestSessionDestination != RootDestination.LOADING -> latestSessionDestination
+            latestSessionDestination == RootDestination.AUTH_CHOICE -> RootDestination.AUTH_CHOICE
+            latestSessionDestination == RootDestination.HOME &&
+                (sessionStatusReady || startupAnimationFinished) -> RootDestination.HOME
             lastStableDestination != null -> lastStableDestination!!
             else -> RootDestination.LOADING
         }

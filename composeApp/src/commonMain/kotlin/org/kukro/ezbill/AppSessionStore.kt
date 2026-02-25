@@ -68,6 +68,24 @@ object AppSessionStore {
     private val _state = MutableStateFlow(AppSessionState())
     val state: StateFlow<AppSessionState> = _state.asStateFlow()
 
+    private suspend fun setState(block: () -> AppSessionState) {
+        withContext(Dispatchers.Main) {
+            _state.value = block()
+        }
+    }
+
+    private fun setStateOnMain(block: () -> AppSessionState) {
+        scope.launch(Dispatchers.Main) {
+            _state.value = block()
+        }
+    }
+
+    private fun setStateOnMain(newState: AppSessionState) {
+        scope.launch(Dispatchers.Main) {
+            _state.value = newState
+        }
+    }
+
     fun start() {
         if (started) return
         started = true
@@ -78,7 +96,7 @@ object AppSessionStore {
                         when (status) {
                             is SessionStatus.Initializing -> {
                                 if (isSigningOut) return@collect
-                                _state.value = _state.value.copy(status = AppSessionStatus.Initializing)
+                                setStateOnMain { _state.value.copy(status = AppSessionStatus.Initializing) }
                             }
 
                             is SessionStatus.NotAuthenticated -> {
@@ -101,9 +119,11 @@ object AppSessionStore {
 
                             is SessionStatus.RefreshFailure -> {
                                 if (isSigningOut) return@collect
-                                _state.value = _state.value.copy(
-                                    status = AppSessionStatus.Error("Session refresh failed")
-                                )
+                                setStateOnMain {
+                                    _state.value.copy(
+                                        status = AppSessionStatus.Error("Session refresh failed")
+                                    )
+                                }
                             }
                         }
                     }
@@ -141,25 +161,29 @@ object AppSessionStore {
     suspend fun switchSpace(space: Space) {
         val current = _state.value
         if (space.id.isBlank()) return
-        _state.value = current.copy(status = AppSessionStatus.Loading, selectedSpace = space)
+        setState { current.copy(status = AppSessionStatus.Loading, selectedSpace = space) }
         try {
             val members = loadMembers(space.id)
             val expenses = loadExpenses(space.id)
             val expenseParticipantIds = loadExpenseParticipantIds(expenses)
             val memberProfiles = loadProfilesForMembers(members, _state.value.profile)
-            _state.value = _state.value.copy(
-                status = AppSessionStatus.Ready,
-                memberProfiles = memberProfiles,
-                members = members,
-                expenses = expenses,
-                expenseParticipantIds = expenseParticipantIds
-            )
+            setState {
+                _state.value.copy(
+                    status = AppSessionStatus.Ready,
+                    memberProfiles = memberProfiles,
+                    members = members,
+                    expenses = expenses,
+                    expenseParticipantIds = expenseParticipantIds
+                )
+            }
             saveSelectedSpaceId(space.id)
             subscribeForSpace(space.id)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(
-                status = AppSessionStatus.Error(e.message ?: "Switch space failed")
-            )
+            setState {
+                _state.value.copy(
+                    status = AppSessionStatus.Error(e.message ?: "Switch space failed")
+                )
+            }
         }
     }
 
@@ -167,11 +191,13 @@ object AppSessionStore {
         val space = SupabaseService.createSpace(name, displayName)
         val current = _state.value
         val mergedSpaces = (current.spaces + space).distinctBy { it.id }
-        _state.value = current.copy(
-            status = AppSessionStatus.Loading,
-            spaces = mergedSpaces,
-            selectedSpace = space
-        )
+        setState {
+            current.copy(
+                status = AppSessionStatus.Loading,
+                spaces = mergedSpaces,
+                selectedSpace = space
+            )
+        }
         bootstrapAuthenticated(selectedSpaceId = space.id, fallbackSelectedSpace = space)
     }
 
@@ -185,11 +211,13 @@ object AppSessionStore {
         ).decodeAs<Space>()
         val current = _state.value
         val mergedSpaces = (current.spaces + space).distinctBy { it.id }
-        _state.value = current.copy(
-            status = AppSessionStatus.Loading,
-            spaces = mergedSpaces,
-            selectedSpace = space
-        )
+        setState {
+            current.copy(
+                status = AppSessionStatus.Loading,
+                spaces = mergedSpaces,
+                selectedSpace = space
+            )
+        }
         bootstrapAuthenticated(selectedSpaceId = space.id, fallbackSelectedSpace = space)
     }
 
@@ -235,9 +263,7 @@ object AppSessionStore {
         try {
             bootstrapMutex.withLock {
                 clearSubscriptions()
-                _state.value = AppSessionState(
-                    status = AppSessionStatus.Unauthenticated
-                )
+                setState { AppSessionState(status = AppSessionStatus.Unauthenticated) }
                 runCatching {
                     supabase.auth.signOut(scope = SignOutScope.LOCAL)
                 }.onFailure {
@@ -257,7 +283,7 @@ object AppSessionStore {
         bootstrapMutex.withLock {
             if (isSigningOut) return@withLock
             isBootstrapping = true
-            _state.value = _state.value.copy(status = AppSessionStatus.Loading)
+            setState { _state.value.copy(status = AppSessionStatus.Loading) }
             try {
                 println("AppSessionStore.bootstrap start selectedSpaceId=$selectedSpaceId")
                 val authUser = runCatching {
@@ -286,12 +312,14 @@ object AppSessionStore {
                 val isAnonymousUser = provider == "anonymous" || "anonymous" in providers
 
                 // As soon as auth info is known, expose it so UI can enter HomeScreen early.
-                _state.value = _state.value.copy(
-                    status = AppSessionStatus.Loading,
-                    currentUserId = currentUserId,
-                    currentUserEmail = currentUserEmail,
-                    isAnonymousUser = isAnonymousUser
-                )
+                setState {
+                    _state.value.copy(
+                        status = AppSessionStatus.Loading,
+                        currentUserId = currentUserId,
+                        currentUserEmail = currentUserEmail,
+                        isAnonymousUser = isAnonymousUser
+                    )
+                }
                 if (isSigningOut) return@withLock
 
                 println("auth email=${authUser?.email}, newEmail=${authUser?.newEmail}, currentUserEmail=$currentUserEmail, provider=$provider")
@@ -330,27 +358,31 @@ object AppSessionStore {
                 val memberProfiles = loadProfilesForMembers(members, profile)
                 println("AppSessionStore.bootstrap step=memberProfiles done count=${memberProfiles.size}")
 
-                _state.value = AppSessionState(
-                    status = AppSessionStatus.Ready,
-                    currentUserId = currentUserId,
-                    currentUserEmail = currentUserEmail,
-                    isAnonymousUser = isAnonymousUser,
-                    profile = profile,
-                    memberProfiles = memberProfiles,
-                    spaces = spacesWithFallback,
-                    selectedSpace = selected,
-                    members = members,
-                    expenses = expenses,
-                    expenseParticipantIds = expenseParticipantIds
-                )
+                setState {
+                    AppSessionState(
+                        status = AppSessionStatus.Ready,
+                        currentUserId = currentUserId,
+                        currentUserEmail = currentUserEmail,
+                        isAnonymousUser = isAnonymousUser,
+                        profile = profile,
+                        memberProfiles = memberProfiles,
+                        spaces = spacesWithFallback,
+                        selectedSpace = selected,
+                        members = members,
+                        expenses = expenses,
+                        expenseParticipantIds = expenseParticipantIds
+                    )
+                }
                 println("AppSessionStore.bootstrap done status=Ready")
                 if (isSigningOut) return@withLock
                 subscribeForSpace(selected?.id)
             } catch (e: Exception) {
                 println("AppSessionStore.bootstrap failed message=${e.message}")
-                _state.value = _state.value.copy(
-                    status = AppSessionStatus.Error(e.message ?: "Bootstrap failed")
-                )
+                setState {
+                    _state.value.copy(
+                        status = AppSessionStatus.Error(e.message ?: "Bootstrap failed")
+                    )
+                }
             } finally {
                 isBootstrapping = false
                 println("AppSessionStore.bootstrap end")
@@ -369,10 +401,10 @@ object AppSessionStore {
     }
 
     private fun clearData(status: AppSessionStatus) {
-        _state.value = AppSessionState(
-            status = status
-        )
-        clearSubscriptions()
+        scope.launch(Dispatchers.Main) {
+            _state.value = AppSessionState(status = status)
+            clearSubscriptions()
+        }
     }
 
     private suspend fun loadSpaces(): List<Space> {
@@ -461,9 +493,11 @@ object AppSessionStore {
                     }.getOrElse {
                         emptyList()
                     }
-                    _state.value = current.copy(
-                        expenses = listOf(item) + current.expenses,
-                        expenseParticipantIds = current.expenseParticipantIds + (item.id to participantIds)
+                    setStateOnMain(
+                        current.copy(
+                            expenses = listOf(item) + current.expenses,
+                            expenseParticipantIds = current.expenseParticipantIds + (item.id to participantIds)
+                        )
                     )
                 }
         }
@@ -492,9 +526,11 @@ object AppSessionStore {
                     } else {
                         current.memberProfiles
                     }
-                    _state.value = current.copy(
-                        members = current.members + item,
-                        memberProfiles = updatedProfiles
+                    setStateOnMain(
+                        current.copy(
+                            members = current.members + item,
+                            memberProfiles = updatedProfiles
+                        )
                     )
                 }
         }
@@ -504,17 +540,20 @@ object AppSessionStore {
     }
 
     private fun clearSubscriptions() {
-        expensesCollectJob?.cancel()
-        membersCollectJob?.cancel()
-        expensesCollectJob = null
-        membersCollectJob = null
-
+        val expJob = expensesCollectJob
+        val memJob = membersCollectJob
         val oldExpensesChannel = expensesChannel
         val oldMembersChannel = membersChannel
+        expensesCollectJob = null
+        membersCollectJob = null
         expensesChannel = null
         membersChannel = null
+        expJob?.cancel()
+        memJob?.cancel()
 
         safeLaunch("clearSubscriptions.unsubscribe") {
+            expJob?.join()
+            memJob?.join()
             runCatching { oldExpensesChannel?.unsubscribe() }
                 .onFailure { println("AppSessionStore.unsubscribe expenses failed message=${it.message}") }
             runCatching { oldMembersChannel?.unsubscribe() }
@@ -548,13 +587,15 @@ object AppSessionStore {
             val expenses = loadExpenses(selectedSpaceId)
             val expenseParticipantIds = loadExpenseParticipantIds(expenses)
             val memberProfiles = loadProfilesForMembers(members, current.profile)
-            _state.value = _state.value.copy(
-                status = AppSessionStatus.Ready,
-                members = members,
-                expenses = expenses,
-                expenseParticipantIds = expenseParticipantIds,
-                memberProfiles = memberProfiles
-            )
+            setState {
+                _state.value.copy(
+                    status = AppSessionStatus.Ready,
+                    members = members,
+                    expenses = expenses,
+                    expenseParticipantIds = expenseParticipantIds,
+                    memberProfiles = memberProfiles
+                )
+            }
         } catch (e: Exception) {
             println("AppSessionStore.recoverAfterForeground refresh failed message=${e.message}")
         } finally {
@@ -590,7 +631,7 @@ object AppSessionStore {
             current.memberProfiles + (uid to profile)
         }
         val updatedCurrentProfile = if (current.currentUserId == uid) profile else current.profile
-        _state.value = current.copy(profile = updatedCurrentProfile, memberProfiles = updatedMap)
+        setStateOnMain(current.copy(profile = updatedCurrentProfile, memberProfiles = updatedMap))
     }
 
     private suspend fun enforceSingleSession() {

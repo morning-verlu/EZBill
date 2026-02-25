@@ -1,7 +1,12 @@
 package org.kukro.ezbill
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -9,10 +14,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -26,7 +33,6 @@ import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.animateLottieCompositionAsState
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.kukro.ezbill.app.AppRootIntent
 import org.kukro.ezbill.app.RootDestination
@@ -84,8 +90,10 @@ fun App() {
 private fun RootLoadingScreen(
     modifier: Modifier = Modifier,
     playAnimation: Boolean,
-    onAnimationFinished: () -> Unit
+    onAnimationFinished: () -> Unit = {}
 ) {
+    // When session not yet resolved we keep playAnimation=true and show Lottie (or last frame).
+    // Transition to HOME/AUTH_CHOICE happens only when session is resolved in AppRootStateMachine.
     if (!playAnimation) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -113,9 +121,7 @@ private fun RootLoadingScreen(
     LaunchedEffect(playAnimation, composition) {
         if (playAnimation && composition == null) {
             delay(1800)
-            if (composition == null) {
-                onAnimationFinished()
-            }
+            if (composition == null) onAnimationFinished()
         }
     }
     LaunchedEffect(playAnimation, composition, progress) {
@@ -124,17 +130,37 @@ private fun RootLoadingScreen(
         }
     }
 
+    val showLoadingHint = progress >= 0.999f
+
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = rememberLottiePainter(
-                composition = composition,
-                progress = { progress }
-            ),
-            contentDescription = "Welcome animation",
-            modifier = Modifier.size(220.dp)
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = rememberLottiePainter(
+                    composition = composition,
+                    progress = { progress }
+                ),
+                contentDescription = "Welcome animation",
+                modifier = Modifier.size(220.dp)
+            )
+            AnimatedVisibility(
+                visible = showLoadingHint,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Row(
+                    modifier = Modifier.padding(top = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Text(
+                        text = "加载中…",
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 package org.kukro.ezbill.di
 
+import org.kukro.ezbill.app.AppRootIntent
 import org.kukro.ezbill.app.AppRootStateMachine
 import org.kukro.ezbill.data.datasource.AppSessionDataSource
 import org.kukro.ezbill.data.datasource.SupabaseAccountDataSource
@@ -21,5 +22,13 @@ object AppGraph {
     val expenseUseCases = ExpenseUseCases(expenseRepository)
 
     val rootStateMachine = AppRootStateMachine(sessionUseCases)
+
+    fun dispatchAppForeground() {
+        rootStateMachine.dispatch(AppRootIntent.AppForeground)
+    }
+
+    fun dispatchAppBackground() {
+        rootStateMachine.dispatch(AppRootIntent.AppBackground)
+    }
 }
 

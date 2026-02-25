@@ -12,9 +12,9 @@ struct iOSApp: App {
         .onChange(of: scenePhase) { phase in
             switch phase {
             case .active:
-                AppSessionStore.shared.onAppForeground()
+                AppGraph.shared.dispatchAppForeground()
             case .background:
-                AppSessionStore.shared.onAppBackground()
+                AppGraph.shared.dispatchAppBackground()
             default:
                 break
             }

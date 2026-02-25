@@ -2,8 +2,6 @@ package org.kukro.ezbill.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,8 +52,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,12 +91,6 @@ class HomeScreen : Screen {
         val clipboard = LocalClipboardManager.current
         val navigator = LocalNavigator.current
         val homeListState = rememberLazyListState()
-        val shouldShowMemberSection by remember {
-            derivedStateOf {
-                homeListState.firstVisibleItemIndex == 0 &&
-                        homeListState.firstVisibleItemScrollOffset < 48
-            }
-        }
 
 
         LaunchedEffect(Unit) {
@@ -508,6 +498,9 @@ class HomeScreen : Screen {
                 val allMemberIds = homeScreenModel.state.spaceMembers.map { it.userId }.toSet()
                 val participantIdsByExpense = homeScreenModel.state.expenseParticipantIds
 
+                val hasNoData = homeScreenModel.state.spaceMembers.isEmpty() &&
+                        homeScreenModel.state.expenses.isEmpty()
+
                 PullToRefreshBox(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -516,14 +509,21 @@ class HomeScreen : Screen {
                     isRefreshing = homeScreenModel.state.isPullRefreshing,
                     onRefresh = homeScreenModel::refreshExpenses
                 ) {
-                    LazyColumn(state = homeListState, modifier = Modifier.fillMaxSize()) {
-                        if (homeScreenModel.state.spaceMembers.isNotEmpty()) {
-                            item {
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = shouldShowMemberSection,
-                                    enter = fadeIn(),
-                                    exit = fadeOut()
-                                ) {
+                    if (hasNoData) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "您可以点击右上角 ➕ 创建空间",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(state = homeListState, modifier = Modifier.fillMaxSize()) {
+                            if (homeScreenModel.state.spaceMembers.isNotEmpty()) {
+                                item {
                                     Column {
                                         MemberPreviewList(
                                             members = homeScreenModel.state.spaceMembers,
@@ -540,201 +540,207 @@ class HomeScreen : Screen {
                                         Spacer(Modifier.height(16.dp))
                                     }
                                 }
-                            }
-                        }
 
-                        if (homeScreenModel.state.expenses.isNotEmpty()) {
-                            item {
-                                Text("账单记录", style = MaterialTheme.typography.titleMedium)
-                                Spacer(Modifier.height(16.dp))
-                            }
+                                if (homeScreenModel.state.expenses.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            "账单记录",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                    }
 
-                            items(homeScreenModel.state.expenses, key = { it.id }) { expense ->
-                                val participantDisplay = buildParticipantSummary(
-                                    participantIds = participantIdsByExpense[expense.id].orEmpty(),
-                                    allMemberIds = allMemberIds,
-                                    memberNameMap = memberNameMap
-                                )
-                                val createdByDisplayName = expense.createdBy
-                                    ?.let { uid -> memberNameMap[uid] ?: uid.take(6) }
+                                    items(
+                                        homeScreenModel.state.expenses,
+                                        key = { it.id }) { expense ->
+                                        val participantDisplay = buildParticipantSummary(
+                                            participantIds = participantIdsByExpense[expense.id].orEmpty(),
+                                            allMemberIds = allMemberIds,
+                                            memberNameMap = memberNameMap
+                                        )
+                                        val createdByDisplayName = expense.createdBy
+                                            ?.let { uid -> memberNameMap[uid] ?: uid.take(6) }
 
-                                ExpenseItemCard(
-                                    expense = expense,
-                                    payerDisplayName = memberNameMap[expense.payerId] ?: "未知成员",
-                                    participantSummary = participantDisplay,
-                                    createdByDisplayName = createdByDisplayName
-                                )
+                                        ExpenseItemCard(
+                                            expense = expense,
+                                            payerDisplayName = memberNameMap[expense.payerId]
+                                                ?: "未知成员",
+                                            participantSummary = participantDisplay,
+                                            createdByDisplayName = createdByDisplayName
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+
         }
-
     }
-}
 
-@Composable
-private fun ExpenseItemCard(
-    expense: Expense,
-    payerDisplayName: String,
-    participantSummary: String,
-    createdByDisplayName: String?
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
+    @Composable
+    private fun ExpenseItemCard(
+        expense: Expense,
+        payerDisplayName: String,
+        participantSummary: String,
+        createdByDisplayName: String?
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "¥${expense.amount}",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Text(
-                    text = formatExpenseTime(expense.createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (expense.note.isNotBlank()) {
-                Text(
-                    text = expense.note,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                Text(
-                    text = "无备注",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "付款：$payerDisplayName",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                createdByDisplayName?.takeIf { it.isNotBlank() }?.let {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "创建：$it",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "¥${expense.amount}",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = formatExpenseTime(expense.createdAt),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
 
-            Text(
-                text = "参与：$participantSummary",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
+                if (expense.note.isNotBlank()) {
+                    Text(
+                        text = expense.note,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    Text(
+                        text = "无备注",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-private fun buildParticipantSummary(
-    participantIds: List<String>,
-    allMemberIds: Set<String>,
-    memberNameMap: Map<String, String>
-): String {
-    val ids = participantIds.distinct()
-    if (ids.isEmpty()) return "全员参与"
-    if (allMemberIds.isNotEmpty() && ids.toSet() == allMemberIds) return "全员参与"
-    return ids.joinToString("、") { uid ->
-        memberNameMap[uid] ?: uid.take(6)
-    }
-}
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "付款：$payerDisplayName",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    createdByDisplayName?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = "创建：$it",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-private fun formatExpenseTime(raw: String?): String {
-    if (raw.isNullOrBlank()) return ""
-    runCatching {
-        val chinaDateTime = Instant.parse(raw).toLocalDateTime(CHINA_TIME_ZONE)
-        return "${chinaDateTime.month.number.pad2()}-${chinaDateTime.day.pad2()} " +
-                "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
-    }
-
-    val noZone = raw
-        .replace('T', ' ')
-        .substringBefore('+')
-        .substringBefore('Z')
-    return when {
-        noZone.length >= 16 -> noZone.substring(5, 16)
-        else -> noZone
-    }
-}
-
-private fun Int.pad2(): String = toString().padStart(2, '0')
-private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
-
-@Composable
-fun MemberPreviewList(
-    members: List<SpaceMember>,
-    maxCount: Int = 5,
-    currentUserId: String?,
-    memberProfiles: Map<String, org.kukro.ezbill.models.Profile>,
-    onViewAll: () -> Unit
-) {
-    val preview = members.take(maxCount)
-    if (preview.isEmpty()) return
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("成员（${members.size}）", style = MaterialTheme.typography.titleMedium)
-        if (members.size > maxCount) {
-            TextButton(onClick = onViewAll) {
-                Text("查看全部")
-            }
-        }
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(preview, key = { it.userId }) { user ->
-            val isCurrentUser = user.userId == currentUserId
-            val profile = memberProfiles[user.userId]
-            val avatarUrl =
-                profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: AppConfig.DEFAULT_AVATAR
-            val displayName = user.displayName?.takeIf { it.isNotBlank() }
-                ?: profile?.username?.takeIf { it.isNotBlank() }
-                ?: if (isCurrentUser) "我" else user.userId.take(6)
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(48.dp).clip(CircleShape)
-                )
                 Text(
-                    text = displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
+                    text = "参与：$participantSummary",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+
+    private fun buildParticipantSummary(
+        participantIds: List<String>,
+        allMemberIds: Set<String>,
+        memberNameMap: Map<String, String>
+    ): String {
+        val ids = participantIds.distinct()
+        if (ids.isEmpty()) return "全员参与"
+        if (allMemberIds.isNotEmpty() && ids.toSet() == allMemberIds) return "全员参与"
+        return ids.joinToString("、") { uid ->
+            memberNameMap[uid] ?: uid.take(6)
+        }
+    }
+
+    private fun formatExpenseTime(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        runCatching {
+            val chinaDateTime = Instant.parse(raw).toLocalDateTime(CHINA_TIME_ZONE)
+            return "${chinaDateTime.month.number.pad2()}-${chinaDateTime.day.pad2()} " +
+                    "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
+        }
+
+        val noZone = raw
+            .replace('T', ' ')
+            .substringBefore('+')
+            .substringBefore('Z')
+        return when {
+            noZone.length >= 16 -> noZone.substring(5, 16)
+            else -> noZone
+        }
+    }
+
+    private fun Int.pad2(): String = toString().padStart(2, '0')
+    private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
+
+    @Composable
+    fun MemberPreviewList(
+        members: List<SpaceMember>,
+        maxCount: Int = 5,
+        currentUserId: String?,
+        memberProfiles: Map<String, org.kukro.ezbill.models.Profile>,
+        onViewAll: () -> Unit
+    ) {
+        val preview = members.take(maxCount)
+        if (preview.isEmpty()) return
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("成员（${members.size}）", style = MaterialTheme.typography.titleMedium)
+            if (members.size > maxCount) {
+                TextButton(onClick = onViewAll) {
+                    Text("查看全部")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(preview, key = { it.userId }) { user ->
+                val isCurrentUser = user.userId == currentUserId
+                val profile = memberProfiles[user.userId]
+                val avatarUrl =
+                    profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: AppConfig.DEFAULT_AVATAR
+                val displayName = user.displayName?.takeIf { it.isNotBlank() }
+                    ?: profile?.username?.takeIf { it.isNotBlank() }
+                    ?: if (isCurrentUser) "我" else user.userId.take(6)
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(48.dp).clip(CircleShape)
+                    )
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
