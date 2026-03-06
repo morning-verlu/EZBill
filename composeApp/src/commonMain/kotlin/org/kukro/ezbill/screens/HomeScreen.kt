@@ -81,6 +81,8 @@ import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
 import kotlin.time.Instant
 
+private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
+
 class HomeScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
     @Composable
@@ -686,7 +688,6 @@ class HomeScreen : Screen {
     }
 
     private fun Int.pad2(): String = toString().padStart(2, '0')
-    private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
 
     @Composable
     fun MemberPreviewList(
