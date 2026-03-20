@@ -70,18 +70,13 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import coil3.compose.AsyncImage
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.number
-import kotlinx.datetime.toLocalDateTime
 import org.kukro.ezbill.AppConfig
 import org.kukro.ezbill.LocalSnackBarHostState
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.HomeScreenModel
 import org.kukro.ezbill.screenModels.HomeUiState
-import kotlin.time.Instant
-
-private val CHINA_TIME_ZONE = TimeZone.of("Asia/Shanghai")
+import org.kukro.ezbill.util.formatExpenseCreatedAt
 
 class HomeScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -608,7 +603,7 @@ class HomeScreen : Screen {
                         style = MaterialTheme.typography.titleLarge
                     )
                     Text(
-                        text = formatExpenseTime(expense.createdAt),
+                        text = formatExpenseCreatedAt(expense.createdAt),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -668,26 +663,6 @@ class HomeScreen : Screen {
             memberNameMap[uid] ?: uid.take(6)
         }
     }
-
-    private fun formatExpenseTime(raw: String?): String {
-        if (raw.isNullOrBlank()) return ""
-        runCatching {
-            val chinaDateTime = Instant.parse(raw).toLocalDateTime(CHINA_TIME_ZONE)
-            return "${chinaDateTime.month.number.pad2()}-${chinaDateTime.day.pad2()} " +
-                    "${chinaDateTime.hour.pad2()}:${chinaDateTime.minute.pad2()}"
-        }
-
-        val noZone = raw
-            .replace('T', ' ')
-            .substringBefore('+')
-            .substringBefore('Z')
-        return when {
-            noZone.length >= 16 -> noZone.substring(5, 16)
-            else -> noZone
-        }
-    }
-
-    private fun Int.pad2(): String = toString().padStart(2, '0')
 
     @Composable
     fun MemberPreviewList(
