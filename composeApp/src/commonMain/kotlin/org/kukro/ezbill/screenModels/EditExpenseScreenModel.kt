@@ -10,14 +10,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.kukro.ezbill.di.AppGraph
 import org.kukro.ezbill.domain.usecase.ExpenseUseCases
+import org.kukro.ezbill.domain.usecase.SessionUseCases
+import org.kukro.ezbill.models.AppSessionState
 import org.kukro.ezbill.models.CreateExpenseData
 import org.kukro.ezbill.models.Expense
+import org.kukro.ezbill.models.SpaceMember
 
 class EditExpenseScreenModel(
     val spaceId: String,
     val userId: String,
-    memberUserIds: List<String>,
-    private val expenseUseCases: ExpenseUseCases = AppGraph.expenseUseCases
+    private val expenseUseCases: ExpenseUseCases = AppGraph.expenseUseCases,
+    private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
 ) : ScreenModel {
     companion object {
         private const val MAX_EXPENSE_AMOUNT = 999999.99
@@ -28,17 +31,14 @@ class EditExpenseScreenModel(
     var state by mutableStateOf<EditExpenseUIState>(EditExpenseUIState.Idle)
         private set
 
+    var spaceMembers by mutableStateOf<List<SpaceMember>>(emptyList())
+        private set
+
     var expenseAmountText by mutableStateOf("")
     var amountInputError by mutableStateOf<String?>(null)
         private set
     var selectedPayerId: String? by mutableStateOf(userId)
-    var selectedParticipantIds by mutableStateOf(
-        memberUserIds
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .toSet()
-    )
+    var selectedParticipantIds by mutableStateOf<Set<String>>(emptySet())
     var createdId by mutableStateOf("")
     private var job: Job? = null
 
@@ -52,6 +52,37 @@ class EditExpenseScreenModel(
         )
     )
         private set
+
+    private var participantsInitialized = false
+
+    init {
+        sessionUseCases.start()
+        syncMembersFromSession(sessionUseCases.sessionState.value)
+        screenModelScope.launch {
+            sessionUseCases.sessionState.collect { syncMembersFromSession(it) }
+        }
+    }
+
+    private fun syncMembersFromSession(appState: AppSessionState) {
+        if (appState.selectedSpace?.id != spaceId) return
+        val members = appState.members
+        spaceMembers = members
+        val ids = members
+            .map { it.userId.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        if (!participantsInitialized && ids.isNotEmpty()) {
+            selectedParticipantIds = ids.toSet()
+            participantsInitialized = true
+            if (userId !in ids) {
+                selectedPayerId = ids.first()
+                expenseData = expenseData.copy(payerId = ids.first())
+            } else {
+                selectedPayerId = userId
+                expenseData = expenseData.copy(payerId = userId)
+            }
+        }
+    }
 
     fun onSelectPayerId(id: String) {
         selectedPayerId = id

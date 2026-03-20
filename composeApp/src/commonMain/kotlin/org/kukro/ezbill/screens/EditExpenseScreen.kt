@@ -42,14 +42,12 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import org.kukro.ezbill.models.SpaceMember
 import org.kukro.ezbill.screenModels.EditExpenseScreenModel
 import org.kukro.ezbill.screenModels.EditExpenseUIState
 
 class EditExpenseScreen(
     private val spaceId: String,
-    private val userId: String,
-    private val members: List<SpaceMember>
+    private val userId: String
 ) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -60,8 +58,7 @@ class EditExpenseScreen(
             rememberScreenModel {
                 EditExpenseScreenModel(
                     spaceId = spaceId,
-                    userId = userId,
-                    memberUserIds = members.map { it.userId }
+                    userId = userId
                 )
             }
 
@@ -154,7 +151,7 @@ class EditExpenseScreen(
                 }
 
                 items(
-                    items = members,
+                    items = editExpenseScreenModel.spaceMembers,
                     key = { "payer-${it.userId}" }
                 ) { member ->
                     PayerRow(
@@ -179,7 +176,7 @@ class EditExpenseScreen(
                             style = MaterialTheme.typography.titleSmall
                         )
                         Text(
-                            text = "${editExpenseScreenModel.selectedParticipantIds.size}/${members.size}",
+                            text = "${editExpenseScreenModel.selectedParticipantIds.size}/${editExpenseScreenModel.spaceMembers.size}",
                             style = MaterialTheme.typography.labelLarge,
                             color = if (editExpenseScreenModel.selectedParticipantIds.isEmpty()) {
                                 MaterialTheme.colorScheme.error
@@ -191,7 +188,7 @@ class EditExpenseScreen(
                 }
 
                 items(
-                    items = members,
+                    items = editExpenseScreenModel.spaceMembers,
                     key = { "participant-${it.userId}" }
                 ) { member ->
                     val checked = editExpenseScreenModel.selectedParticipantIds.contains(member.userId)

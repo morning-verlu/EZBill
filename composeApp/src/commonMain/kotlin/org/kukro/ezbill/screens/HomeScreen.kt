@@ -263,8 +263,7 @@ class HomeScreen : Screen {
                                     homeScreenModel.onExpandedFabButtons(false)
                                     navigator?.push(
                                         SettlementScreen(
-                                            spaceId = homeScreenModel.state.space.id,
-                                            members = homeScreenModel.state.spaceMembers,
+                                            spaceId = homeScreenModel.state.space.id
                                         )
                                     )
                                 },
@@ -285,7 +284,6 @@ class HomeScreen : Screen {
                                     navigator?.push(
                                         EditExpenseScreen(
                                             spaceId = homeScreenModel.state.space.id,
-                                            members = homeScreenModel.state.spaceMembers,
                                             userId = userId
                                         )
                                     )

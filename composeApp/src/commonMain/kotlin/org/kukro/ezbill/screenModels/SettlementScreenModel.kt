@@ -12,13 +12,13 @@ import org.kukro.ezbill.domain.usecase.ExpenseUseCases
 import org.kukro.ezbill.domain.usecase.SessionUseCases
 import org.kukro.ezbill.models.Expense
 import org.kukro.ezbill.models.ExpenseShareRow
+import org.kukro.ezbill.models.Profile
 import org.kukro.ezbill.models.SettlementTransferInput
 import org.kukro.ezbill.models.SpaceMember
 import kotlin.math.round
 
 class SettlementScreenModel(
     private val spaceId: String,
-    private val members: List<SpaceMember>,
     private val expenseUseCases: ExpenseUseCases = AppGraph.expenseUseCases,
     private val sessionUseCases: SessionUseCases = AppGraph.sessionUseCases
 ) : ScreenModel {
@@ -28,6 +28,12 @@ class SettlementScreenModel(
 
     var currentUserId by mutableStateOf<String?>(null)
         private set
+
+    var memberProfiles by mutableStateOf<Map<String, Profile>>(emptyMap())
+        private set
+
+    /** 当前会话中与 [spaceId] 对应的成员（来自 Session，避免 Screen 携带不可序列化参数） */
+    private var sessionMembers by mutableStateOf<List<SpaceMember>>(emptyList())
 
     var note by mutableStateOf("")
         private set
@@ -40,6 +46,10 @@ class SettlementScreenModel(
         screenModelScope.launch {
             sessionUseCases.sessionState.collect { appState ->
                 currentUserId = appState.currentUserId
+                memberProfiles = appState.memberProfiles
+                if (appState.selectedSpace?.id == spaceId) {
+                    sessionMembers = appState.members
+                }
             }
         }
     }
@@ -52,9 +62,12 @@ class SettlementScreenModel(
         screenModelScope.launch {
             uiState = SettlementUiState.Loading
             try {
+                val appState = sessionUseCases.sessionState.value
+                val membersForPreview =
+                    if (appState.selectedSpace?.id == spaceId) appState.members else sessionMembers
                 val expenses = expenseUseCases.fetchExpensesBySpace(spaceId)
                 val shares = expenseUseCases.fetchExpenseSharesByExpenseIds(expenses.map { it.id })
-                val preview = buildPreview(members, expenses, shares)
+                val preview = buildPreview(membersForPreview, expenses, shares)
                 uiState = SettlementUiState.Success(preview)
             } catch (e: CancellationException) {
                 throw e
